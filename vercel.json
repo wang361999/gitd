@@ -10,6 +10,7 @@
     "app/api/webhook/route.ts": { "maxDuration": 30 },
     "app/api/projects/route.ts": { "maxDuration": 10 },
     "app/api/governance/route.ts": { "maxDuration": 10 },
-    "app/api/setup/route.ts": { "maxDuration": 30 }
+    "app/api/setup/route.ts": { "maxDuration": 30 },
+    "app/api/admin/route.ts": { "maxDuration": 10 }
   }
 }

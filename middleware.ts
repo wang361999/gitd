@@ -19,6 +19,7 @@ export function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/api/") ||
     pathname.startsWith("/setup") ||
+    pathname.startsWith("/admin") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/favicon")
   ) {
@@ -36,5 +37,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|setup|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api|setup|admin|_next/static|_next/image|favicon.ico).*)"],
 };

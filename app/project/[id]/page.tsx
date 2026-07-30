@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import ResultDisplay from '@/components/ResultDisplay';
+import GovernanceReport from '@/components/governance/GovernanceReport';
+import ProvenanceView from '@/components/governance/ProvenanceView';
+import SecurityView from '@/components/governance/SecurityView';
+import LoreTimeline from '@/components/governance/LoreTimeline';
 
 interface Project {
   id: string;
@@ -50,6 +54,8 @@ const TYPE_LABELS: Record<string, string> = {
   mobile: '移动应用',
 };
 
+type TabKey = 'overview' | 'report' | 'provenance' | 'security' | 'lore';
+
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
   return date.toLocaleString('zh-CN', {
@@ -68,6 +74,7 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
   useEffect(() => {
     let mounted = true;
@@ -141,6 +148,22 @@ export default function ProjectDetailPage() {
   const isBuilding = ['building', 'governing', 'packaging'].includes(
     project.status
   );
+  // 仅当项目状态为 done 时才显示治理相关 Tab
+  const showGovernance = project.status === 'done';
+
+  const tabs: { key: TabKey; label: string; show: boolean }[] = [
+    { key: 'overview', label: '概览', show: true },
+    { key: 'report', label: '治理报告', show: showGovernance },
+    { key: 'provenance', label: '代码溯源', show: showGovernance },
+    { key: 'security', label: '安全审计', show: showGovernance },
+    { key: 'lore', label: '决策记录', show: showGovernance },
+  ];
+  const visibleTabs = tabs.filter((t) => t.show);
+
+  // 若当前 Tab 因状态变化被隐藏，回退到概览
+  const currentTab: TabKey = visibleTabs.some((t) => t.key === activeTab)
+    ? activeTab
+    : 'overview';
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -259,53 +282,95 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {/* 结果展示 */}
-      {project.status === 'done' && (
-        <ResultDisplay
-          repoUrl={project.repoUrl}
-          previewUrl={project.previewUrl}
-          downloadUrl={project.downloadUrl}
-          projectId={project.id}
-        />
-      )}
-
-      {/* 仓库信息（构建中也可查看已有仓库） */}
-      {project.repoUrl && project.status !== 'done' && (
-        <div className="forge-card p-6">
-          <h3 className="mb-3 text-sm font-medium text-forge-ink">仓库信息</h3>
-          <a
-            href={project.repoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 rounded-lg border border-forge-border bg-forge-bg p-4 transition-all hover:border-forge-accent/50"
-          >
-            <svg
-              className="h-6 w-6 flex-shrink-0 text-forge-accent"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-            </svg>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-forge-ink group-hover:text-forge-accent">
-                {project.repoOwner}/{project.repoName}
-              </p>
-              <p className="truncate text-xs text-forge-muted">
-                {project.repoUrl}
-              </p>
-            </div>
-            <svg
-              className="h-4 w-4 flex-shrink-0 text-forge-muted"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M3.75 2h3.5a.75.75 0 010 1.5h-3.5a.25.25 0 00-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 00.25-.25v-3.5a.75.75 0 011.5 0v3.5A1.75 1.75 0 0112.25 14h-8.5A1.75 1.75 0 012 12.25v-8.5C2 2.784 2.784 2 3.75 2zm6.854-1h4.146a.25.25 0 01.25.25v4.146a.25.25 0 01-.427.177L13.03 4.03 9.28 7.78a.751.751 0 01-1.042-.018.751.751 0 01-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0110.604 1z" />
-            </svg>
-          </a>
+      {/* Tab 栏 */}
+      {visibleTabs.length > 1 && (
+        <div className="flex flex-wrap gap-1 border-b border-forge-border">
+          {visibleTabs.map((tab) => {
+            const active = tab.key === currentTab;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`relative -mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                  active
+                    ? 'border-forge-accent text-forge-ink'
+                    : 'border-transparent text-forge-muted hover:text-forge-ink'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       )}
+
+      {/* Tab 内容 */}
+      <div key={currentTab} className="forge-animate-fade-in">
+        {currentTab === 'overview' && (
+          <div className="space-y-6">
+            {/* 结果展示 */}
+            {project.status === 'done' && (
+              <ResultDisplay
+                repoUrl={project.repoUrl}
+                previewUrl={project.previewUrl}
+                downloadUrl={project.downloadUrl}
+                projectId={project.id}
+              />
+            )}
+
+            {/* 仓库信息（构建中也可查看已有仓库） */}
+            {project.repoUrl && project.status !== 'done' && (
+              <div className="forge-card p-6">
+                <h3 className="mb-3 text-sm font-medium text-forge-ink">
+                  仓库信息
+                </h3>
+                <a
+                  href={project.repoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 rounded-lg border border-forge-border bg-forge-bg p-4 transition-all hover:border-forge-accent/50"
+                >
+                  <svg
+                    className="h-6 w-6 flex-shrink-0 text-forge-accent"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                  </svg>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-forge-ink group-hover:text-forge-accent">
+                      {project.repoOwner}/{project.repoName}
+                    </p>
+                    <p className="truncate text-xs text-forge-muted">
+                      {project.repoUrl}
+                    </p>
+                  </div>
+                  <svg
+                    className="h-4 w-4 flex-shrink-0 text-forge-muted"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M3.75 2h3.5a.75.75 0 010 1.5h-3.5a.25.25 0 00-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 00.25-.25v-3.5a.75.75 0 011.5 0v3.5A1.75 1.75 0 0112.25 14h-8.5A1.75 1.75 0 012 12.25v-8.5C2 2.784 2.784 2 3.75 2zm6.854-1h4.146a.25.25 0 01.25.25v4.146a.25.25 0 01-.427.177L13.03 4.03 9.28 7.78a.751.751 0 01-1.042-.018.751.751 0 01-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0110.604 1z" />
+                  </svg>
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentTab === 'report' && <GovernanceReport projectId={projectId} />}
+
+        {currentTab === 'provenance' && (
+          <ProvenanceView projectId={projectId} />
+        )}
+
+        {currentTab === 'security' && <SecurityView projectId={projectId} />}
+
+        {currentTab === 'lore' && <LoreTimeline projectId={projectId} />}
+      </div>
     </div>
   );
 }
