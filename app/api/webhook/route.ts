@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ProjectStatus, TaskStage, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { triggerWorkflow } from "@/lib/github";
+import { getSetting, getAppUrl, SETTING_KEYS, ensureTablesExist } from "@/lib/settings";
 
 /**
  * Webhook 路由 (POST)
@@ -10,9 +11,12 @@ import { triggerWorkflow } from "@/lib/github";
  */
 export async function POST(request: Request) {
   try {
+    await ensureTablesExist();
+
     // -------------------- 验证 webhook 密钥 --------------------
     const webhookSecret = request.headers.get("X-Webhook-Secret");
-    if (!webhookSecret || webhookSecret !== process.env.WEBHOOK_SECRET) {
+    const expectedSecret = await getSetting(SETTING_KEYS.WEBHOOK_SECRET);
+    if (!webhookSecret || !expectedSecret || webhookSecret !== expectedSecret) {
       return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401 });
     }
 
@@ -38,10 +42,7 @@ export async function POST(request: Request) {
     }
 
     const project = task.project;
-    const appUrl =
-      process.env.APP_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "http://localhost:3000";
+    const appUrl = await getAppUrl();
     const callbackUrl = `${appUrl}/api/webhook`;
 
     // -------------------- 更新 Task 记录 --------------------
@@ -59,9 +60,18 @@ export async function POST(request: Request) {
     if (status === "success") {
       if (stage === "generate") {
         // generate 成功 -> governing，触发 governance.yml
+        // 如果 result 中包含 repoUrl/previewUrl，更新到 project
+        const updateData: Record<string, unknown> = {
+          status: ProjectStatus.governing,
+        };
+        if (result?.repoUrl) updateData.repoUrl = result.repoUrl;
+        if (result?.repoOwner) updateData.repoOwner = result.repoOwner;
+        if (result?.repoName) updateData.repoName = result.repoName;
+        if (result?.previewUrl) updateData.previewUrl = result.previewUrl;
+
         await prisma.project.update({
           where: { id: project.id },
-          data: { status: ProjectStatus.governing },
+          data: updateData,
         });
 
         const governanceTask = await prisma.task.create({
@@ -72,16 +82,19 @@ export async function POST(request: Request) {
           },
         });
 
-        if (project.repoOwner && project.repoName) {
+        const repoOwner = result?.repoOwner || project.repoOwner;
+        const repoName = result?.repoName || project.repoName;
+
+        if (repoOwner && repoName) {
           const runId = await triggerWorkflow(
-            project.repoOwner,
-            project.repoName,
+            repoOwner,
+            repoName,
             "governance.yml",
             "main",
             {
               project_id: project.id,
-              repo_owner: project.repoOwner,
-              repo_name: project.repoName,
+              repo_owner: repoOwner,
+              repo_name: repoName,
               task_id: governanceTask.id,
               callback_url: callbackUrl,
             }
@@ -114,6 +127,7 @@ export async function POST(request: Request) {
             "main",
             {
               project_id: project.id,
+              project_type: project.projectType,
               repo_owner: project.repoOwner,
               repo_name: project.repoName,
               task_id: packageTask.id,
@@ -127,10 +141,30 @@ export async function POST(request: Request) {
         }
       } else if (stage === "package") {
         // package 成功 -> done
+        // 从 result 中提取版本信息，创建 Version 记录
+        const updateData: Record<string, unknown> = {
+          status: ProjectStatus.done,
+        };
+        if (result?.downloadUrl) updateData.downloadUrl = result.downloadUrl;
+        if (result?.previewUrl) updateData.previewUrl = result.previewUrl;
+
         await prisma.project.update({
           where: { id: project.id },
-          data: { status: ProjectStatus.done },
+          data: updateData,
         });
+
+        // 创建 Version 记录
+        if (result?.versionTag || result?.downloadUrl || result?.releaseUrl) {
+          await prisma.version.create({
+            data: {
+              projectId: project.id,
+              versionTag: result.versionTag || `v${new Date().toISOString().split('T')[0]}`,
+              releaseUrl: result.releaseUrl || null,
+              downloadUrl: result.downloadUrl || null,
+              releaseNotes: result.releaseNotes || null,
+            },
+          });
+        }
       }
     } else if (status === "failed") {
       // -------------------- 失败：标记项目为 failed --------------------

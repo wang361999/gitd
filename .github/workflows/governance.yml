@@ -91,9 +91,8 @@ jobs:
             -H "Content-Type: application/json" \
             -H "X-Webhook-Secret: ${WEBHOOK_SECRET}" \
             -d "{
-              \"task_id\": \"${{ inputs.task_id }}\",
-              \"status\": \"${STATUS}\",
-              \"repo_owner\": \"${{ inputs.repo_owner }}\",
-              \"repo_name\": \"${{ inputs.repo_name }}\"
+              \"taskId\": \"${{ inputs.task_id }}\",
+              \"stage\": \"governance\",
+              \"status\": \"${STATUS}\"
             }"
           echo "回调通知已发送"

@@ -93,15 +93,23 @@ jobs:
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
           STATUS="${{ job.status }}"
+          VERSION_TAG="v${{ github.run_id }}"
+          RELEASE_URL="https://github.com/${{ inputs.repo_owner }}/${{ inputs.repo_name }}/releases/tag/${VERSION_TAG}"
+          DOWNLOAD_URL="https://github.com/${{ inputs.repo_owner }}/${{ inputs.repo_name }}/releases/latest"
           echo "打包任务 ${{ inputs.task_id }} 状态: ${STATUS}"
           curl -s -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
             -H "X-Webhook-Secret: ${WEBHOOK_SECRET}" \
             -d "{
-              \"task_id\": \"${{ inputs.task_id }}\",
+              \"taskId\": \"${{ inputs.task_id }}\",
+              \"stage\": \"package\",
               \"status\": \"${STATUS}\",
-              \"project_type\": \"${{ inputs.project_type }}\",
-              \"repo_owner\": \"${{ inputs.repo_owner }}\",
-              \"repo_name\": \"${{ inputs.repo_name }}\"
+              \"result\": {
+                \"versionTag\": \"${VERSION_TAG}\",
+                \"releaseUrl\": \"${RELEASE_URL}\",
+                \"downloadUrl\": \"${DOWNLOAD_URL}\",
+                \"repo_owner\": \"${{ inputs.repo_owner }}\",
+                \"repo_name\": \"${{ inputs.repo_name }}\"
+              }
             }"
           echo "回调通知已发送"

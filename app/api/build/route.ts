@@ -3,12 +3,20 @@ import { ProjectStatus, TaskStage, TaskStatus } from "@prisma/client";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createRepo, triggerWorkflow, slugify } from "@/lib/github";
+import { getAppUrl } from "@/lib/settings";
 
 /**
  * 构建路由 (POST)
- * 接收 { description, projectType, projectName }
- * 流程：创建 Project -> 创建 GitHub 仓库 -> 创建 Task -> 触发 generate.yml
- * 返回 { projectId, taskId }
+ *
+ * 模式 A — 全新构建:
+ *   body: { description, projectType, projectName }
+ *   流程：创建 Project -> 创建 GitHub 仓库 -> 创建 Task -> 触发 generate.yml
+ *   返回 { projectId, taskId }
+ *
+ * 模式 B — 重新打包:
+ *   body: { projectId, action: "repackage" }
+ *   流程：校验归属 -> 更新状态为 packaging -> 创建 Task -> 触发 package.yml
+ *   返回 { projectId, taskId }
  */
 export async function POST(request: Request) {
   // 在 try 外声明，便于出错时回滚项目状态
@@ -18,8 +26,88 @@ export async function POST(request: Request) {
     const session = await requireAuth();
 
     const body = await request.json();
-    const { description, projectType, projectName } = body ?? {};
+    const { description, projectType, projectName, action } = body ?? {};
 
+    // ================================================================
+    // 模式 B：重新打包
+    // ================================================================
+    if (action === "repackage" && body.projectId) {
+      const pid = body.projectId as string;
+
+      const project = await prisma.project.findUnique({
+        where: { id: pid },
+        select: {
+          id: true,
+          userId: true,
+          repoOwner: true,
+          repoName: true,
+          projectType: true,
+          name: true,
+        },
+      });
+
+      if (!project) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+
+      if (project.userId !== session.userId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      if (!project.repoOwner || !project.repoName) {
+        return NextResponse.json(
+          { error: "项目缺少仓库信息，无法重新打包" },
+          { status: 400 }
+        );
+      }
+
+      // 更新项目状态为 packaging
+      await prisma.project.update({
+        where: { id: pid },
+        data: { status: ProjectStatus.packaging },
+      });
+
+      // 创建打包 Task
+      const task = await prisma.task.create({
+        data: {
+          projectId: pid,
+          stage: TaskStage.package,
+          status: TaskStatus.pending,
+        },
+      });
+
+      const appUrl = await getAppUrl();
+      const callbackUrl = `${appUrl}/api/webhook`;
+
+      const runId = await triggerWorkflow(
+        project.repoOwner,
+        project.repoName,
+        "package.yml",
+        "main",
+        {
+          project_type: project.projectType || "web",
+          project_name: project.name,
+          repo_owner: project.repoOwner,
+          repo_name: project.repoName,
+          task_id: task.id,
+          callback_url: callbackUrl,
+        }
+      );
+
+      await prisma.task.update({
+        where: { id: task.id },
+        data: { actionsRunId: runId, status: TaskStatus.running },
+      });
+
+      return NextResponse.json({ projectId: pid, taskId: task.id });
+    }
+
+    // ================================================================
+    // 模式 A：全新构建
+    // ================================================================
     if (!description || !projectName) {
       return NextResponse.json(
         { error: "Missing required fields: description, projectName" },
@@ -63,10 +151,7 @@ export async function POST(request: Request) {
     });
 
     // 4. 触发 generate.yml 工作流
-    const appUrl =
-      process.env.APP_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "http://localhost:3000";
+    const appUrl = await getAppUrl();
     const callbackUrl = `${appUrl}/api/webhook`;
 
     const runId = await triggerWorkflow(

@@ -93,12 +93,24 @@ export async function GET(request: Request) {
       }
     }
 
+    // 构建结果数据（用于构建完成页面展示）
+    const resultData: Record<string, unknown> = {};
+    if (task.project.status === "done" || liveStatus === "success") {
+      if (task.project.repoUrl) resultData.repoUrl = task.project.repoUrl;
+      if (task.project.previewUrl) resultData.previewUrl = task.project.previewUrl;
+      if (task.project.downloadUrl) resultData.downloadUrl = task.project.downloadUrl;
+    }
+    // 如果 task.result 有数据，合并进来
+    if (task.result && typeof task.result === "object") {
+      Object.assign(resultData, task.result as Record<string, unknown>);
+    }
+
     return NextResponse.json({
       stage: task.stage,
       status: liveStatus,
       progress: computeProgress(task.stage, liveStatus),
       logs: task.log || "",
-      result: task.result,
+      result: Object.keys(resultData).length > 0 ? resultData : task.result,
       projectStatus: task.project.status,
     });
   } catch (error) {

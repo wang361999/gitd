@@ -83,16 +83,19 @@ jobs:
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
           STATUS="${{ job.status }}"
+          REPO_URL="https://github.com/${{ inputs.repo_owner }}/${{ inputs.repo_name }}"
           echo "任务 ${{ inputs.task_id }} 状态: ${STATUS}"
           curl -s -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
             -H "X-Webhook-Secret: ${WEBHOOK_SECRET}" \
             -d "{
-              \"task_id\": \"${{ inputs.task_id }}\",
+              \"taskId\": \"${{ inputs.task_id }}\",
+              \"stage\": \"generate\",
               \"status\": \"${STATUS}\",
-              \"project_name\": \"${{ inputs.project_name }}\",
-              \"repo_owner\": \"${{ inputs.repo_owner }}\",
-              \"repo_name\": \"${{ inputs.repo_name }}\",
-              \"project_type\": \"${{ inputs.project_type }}\"
+              \"result\": {
+                \"repoUrl\": \"${REPO_URL}\",
+                \"repoOwner\": \"${{ inputs.repo_owner }}\",
+                \"repoName\": \"${{ inputs.repo_name }}\"
+              }
             }"
           echo "回调通知已发送"

@@ -38,6 +38,17 @@ export async function GET(request: Request) {
             },
             orderBy: { createdAt: "desc" },
           },
+          versions: {
+            select: {
+              id: true,
+              versionTag: true,
+              releaseUrl: true,
+              downloadUrl: true,
+              releaseNotes: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: "desc" },
+          },
           _count: {
             select: { loreRecords: true, versions: true },
           },

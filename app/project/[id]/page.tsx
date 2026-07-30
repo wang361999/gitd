@@ -4,10 +4,21 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import ResultDisplay from '@/components/ResultDisplay';
+import DownloadPanel from '@/components/build/DownloadPanel';
+import InstallGuide from '@/components/build/InstallGuide';
 import GovernanceReport from '@/components/governance/GovernanceReport';
 import ProvenanceView from '@/components/governance/ProvenanceView';
 import SecurityView from '@/components/governance/SecurityView';
 import LoreTimeline from '@/components/governance/LoreTimeline';
+
+interface VersionInfo {
+  id: string;
+  versionTag: string;
+  releaseUrl: string | null;
+  downloadUrl: string | null;
+  releaseNotes: string | null;
+  createdAt: string;
+}
 
 interface Project {
   id: string;
@@ -20,6 +31,7 @@ interface Project {
   repoName: string | null;
   previewUrl: string | null;
   downloadUrl: string | null;
+  versions?: VersionInfo[];
   createdAt: string;
   updatedAt: string;
 }
@@ -54,7 +66,7 @@ const TYPE_LABELS: Record<string, string> = {
   mobile: '移动应用',
 };
 
-type TabKey = 'overview' | 'report' | 'provenance' | 'security' | 'lore';
+type TabKey = 'overview' | 'download' | 'report' | 'provenance' | 'security' | 'lore';
 
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
@@ -153,6 +165,7 @@ export default function ProjectDetailPage() {
 
   const tabs: { key: TabKey; label: string; show: boolean }[] = [
     { key: 'overview', label: '概览', show: true },
+    { key: 'download', label: '下载安装', show: showGovernance },
     { key: 'report', label: '治理报告', show: showGovernance },
     { key: 'provenance', label: '代码溯源', show: showGovernance },
     { key: 'security', label: '安全审计', show: showGovernance },
@@ -358,6 +371,23 @@ export default function ProjectDetailPage() {
                 </a>
               </div>
             )}
+          </div>
+        )}
+
+        {currentTab === 'download' && (
+          <div className="space-y-6">
+            <DownloadPanel
+              projectId={project.id}
+              projectType={project.projectType}
+              repoOwner={project.repoOwner}
+              repoName={project.repoName}
+              downloadUrl={project.downloadUrl}
+            />
+            <InstallGuide
+              projectId={project.id}
+              projectType={project.projectType}
+              repoUrl={project.repoUrl}
+            />
           </div>
         )}
 
