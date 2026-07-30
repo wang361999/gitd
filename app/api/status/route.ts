@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkflowRun } from "@/lib/github";
+import { getForgeRepo } from "@/lib/settings";
 
 /**
  * 根据阶段和状态计算整体进度 (1-7)
@@ -70,16 +71,16 @@ export async function GET(request: Request) {
 
     // 如果 Task 有关联的 actionsRunId，查询 GitHub Actions 实时状态
     // 仅在尚未终结（pending / running）时查询，避免覆盖 webhook 已写入的最终状态
+    // 注意：workflow 在 Agent Forge 仓库上触发，需查询 Forge 仓库而非目标仓库
     if (
       (liveStatus === "pending" || liveStatus === "running") &&
-      task.actionsRunId &&
-      task.project.repoOwner &&
-      task.project.repoName
+      task.actionsRunId
     ) {
       try {
+        const forgeRepo = await getForgeRepo();
         const run = await getWorkflowRun(
-          task.project.repoOwner,
-          task.project.repoName,
+          forgeRepo.owner,
+          forgeRepo.name,
           task.actionsRunId
         );
         if (run.status === "completed") {

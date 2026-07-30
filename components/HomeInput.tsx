@@ -27,6 +27,7 @@ const PROJECT_TYPES = [
 export default function HomeInput() {
   const router = useRouter();
   const [requirement, setRequirement] = useState('');
+  const [projectName, setProjectName] = useState('');
   const [projectType, setProjectType] = useState('web');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +42,11 @@ export default function HomeInput() {
 
     if (requirement.trim().length < 10) {
       setError('需求描述至少需要 10 个字符');
+      return;
+    }
+
+    if (!projectName.trim()) {
+      setError('请输入项目名称');
       return;
     }
 
@@ -61,7 +67,8 @@ export default function HomeInput() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          requirement: requirement.trim(),
+          description: requirement.trim(),
+          projectName: projectName.trim(),
           projectType,
         }),
       });
@@ -82,10 +89,30 @@ export default function HomeInput() {
 
   return (
     <div className="forge-card p-6 forge-animate-fade-in">
+      {/* 项目名称 */}
+      <label
+        htmlFor="projectName"
+        className="mb-2 block text-sm font-medium text-forge-ink"
+      >
+        项目名称
+      </label>
+      <input
+        id="projectName"
+        type="text"
+        value={projectName}
+        onChange={(e) => setProjectName(e.target.value)}
+        placeholder="例如: my-todo-app"
+        className="forge-input w-full font-mono text-sm"
+        disabled={submitting}
+      />
+      <p className="mt-1 text-xs text-forge-muted">
+        将作为 GitHub 仓库名，仅限小写字母、数字和连字符
+      </p>
+
       {/* 需求输入框 */}
       <label
         htmlFor="requirement"
-        className="mb-2 block text-sm font-medium text-forge-ink"
+        className="mb-2 mt-6 block text-sm font-medium text-forge-ink"
       >
         描述你的项目需求
       </label>
