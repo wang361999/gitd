@@ -67,14 +67,34 @@ export async function GET(request: Request) {
       return NextResponse.json({ project });
     }
 
-    // -------------------- 项目列表（分页） --------------------
+    // -------------------- 项目列表（分页 + 搜索 + 筛选） --------------------
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const pageSize = Math.max(1, Math.min(100, parseInt(searchParams.get("pageSize") || "10", 10)));
     const skip = (page - 1) * pageSize;
 
+    // 搜索关键词（按名称或描述模糊匹配）
+    const search = searchParams.get("search")?.trim() || "";
+
+    // 状态筛选
+    const statusFilter = searchParams.get("status")?.trim() || "";
+
+    // 构建 where 条件
+    const where: Record<string, unknown> = { userId: session.userId };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    if (statusFilter && statusFilter !== "all") {
+      where.status = statusFilter;
+    }
+
     const [projects, total] = await Promise.all([
       prisma.project.findMany({
-        where: { userId: session.userId },
+        where,
         orderBy: { createdAt: "desc" },
         skip,
         take: pageSize,
@@ -91,7 +111,7 @@ export async function GET(request: Request) {
           updatedAt: true,
         },
       }),
-      prisma.project.count({ where: { userId: session.userId } }),
+      prisma.project.count({ where }),
     ]);
 
     return NextResponse.json({

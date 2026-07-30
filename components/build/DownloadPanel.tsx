@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface DownloadPanelProps {
   projectId: string;
@@ -49,8 +50,11 @@ export default function DownloadPanel({
   repoName,
   downloadUrl,
 }: DownloadPanelProps) {
+  const router = useRouter();
   const [versions, setVersions] = useState<VersionInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [repackaging, setRepackaging] = useState(false);
+  const [repackageError, setRepackageError] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -254,22 +258,58 @@ export default function DownloadPanel({
 
       {/* 重新打包按钮 */}
       <div className="mt-4 border-t border-forge-border pt-4">
+        {repackageError && (
+          <p className="mb-2 text-xs text-forge-red">{repackageError}</p>
+        )}
         <button
           type="button"
-          onClick={() => {
-            if (confirm('确定要重新打包吗？这将触发一次新的构建流程。')) {
-              fetch('/api/build', {
+          disabled={repackaging}
+          onClick={async () => {
+            if (!confirm('确定要重新打包吗？这将触发一次新的构建流程。')) {
+              return;
+            }
+            setRepackaging(true);
+            setRepackageError('');
+            try {
+              const res = await fetch('/api/build', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ projectId, action: 'repackage' }),
-              }).then(() => {
-                window.location.reload();
               });
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || `重新打包失败 (${res.status})`);
+              }
+              const data = await res.json();
+              // 跳转到构建进度页面
+              router.push(
+                `/project/${projectId}/build?taskId=${data.taskId}`
+              );
+            } catch (e) {
+              setRepackageError(
+                e instanceof Error ? e.message : '重新打包失败'
+              );
+              setRepackaging(false);
             }
           }}
-          className="w-full rounded-lg border border-forge-border bg-forge-bg px-4 py-2 text-sm text-forge-muted transition-all hover:border-forge-accent hover:text-forge-accent"
+          className="w-full rounded-lg border border-forge-border bg-forge-bg px-4 py-2 text-sm text-forge-muted transition-all hover:border-forge-accent hover:text-forge-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
-          重新打包
+          {repackaging ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="h-4 w-4 animate-forge-spin"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z" />
+                <path d="M8 3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 3z" />
+              </svg>
+              正在触发打包...
+            </span>
+          ) : (
+            '重新打包'
+          )}
         </button>
       </div>
     </div>

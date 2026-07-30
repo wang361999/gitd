@@ -32,6 +32,28 @@ export default function HomeInput() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // GitHub 仓库名规则：小写字母、数字、连字符，不能以连字符开头或结尾
+  const REPO_NAME_REGEX = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+  const REPO_NAME_MIN = 2;
+  const REPO_NAME_MAX = 40;
+
+  /** 校验项目名称是否符合 GitHub 仓库命名规则 */
+  function validateProjectName(name: string): string | null {
+    const trimmed = name.trim();
+    if (!trimmed) return '请输入项目名称';
+    if (trimmed.length < REPO_NAME_MIN)
+      return `项目名称至少 ${REPO_NAME_MIN} 个字符`;
+    if (trimmed.length > REPO_NAME_MAX)
+      return `项目名称不能超过 ${REPO_NAME_MAX} 个字符`;
+    if (!REPO_NAME_REGEX.test(trimmed))
+      return '只能包含小写字母、数字和连字符，且不能以连字符开头或结尾';
+    if (trimmed.includes('--'))
+      return '不能包含连续的连字符';
+    return null;
+  }
+
+  const nameError = projectName ? validateProjectName(projectName) : null;
+
   async function handleSubmit() {
     setError('');
 
@@ -45,8 +67,9 @@ export default function HomeInput() {
       return;
     }
 
-    if (!projectName.trim()) {
-      setError('请输入项目名称');
+    const nameValidationError = validateProjectName(projectName);
+    if (nameValidationError) {
+      setError(nameValidationError);
       return;
     }
 
@@ -102,12 +125,28 @@ export default function HomeInput() {
         value={projectName}
         onChange={(e) => setProjectName(e.target.value)}
         placeholder="例如: my-todo-app"
-        className="forge-input w-full font-mono text-sm"
+        className={`forge-input w-full font-mono text-sm ${
+          nameError
+            ? 'border-forge-red/50 focus:border-forge-red'
+            : projectName && !nameError
+              ? 'border-forge-green/50 focus:border-forge-green'
+              : ''
+        }`}
         disabled={submitting}
+        maxLength={40}
       />
-      <p className="mt-1 text-xs text-forge-muted">
-        将作为 GitHub 仓库名，仅限小写字母、数字和连字符
-      </p>
+      <div className="mt-1 flex items-center justify-between text-xs">
+        {nameError ? (
+          <span className="text-forge-red">{nameError}</span>
+        ) : (
+          <span className="text-forge-muted">
+            将作为 GitHub 仓库名，仅限小写字母、数字和连字符
+          </span>
+        )}
+        <span className="text-forge-muted">
+          {projectName.length}/{40}
+        </span>
+      </div>
 
       {/* 需求输入框 */}
       <label

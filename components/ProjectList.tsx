@@ -21,6 +21,8 @@ interface ProjectListProps {
   loading?: boolean;
   /** 删除成功后的回调（用于刷新列表） */
   onProjectDeleted?: () => void;
+  /** 是否处于搜索/筛选模式（影响空状态文案） */
+  searchMode?: boolean;
 }
 
 const STATUS_MAP: Record<
@@ -66,6 +68,7 @@ export default function ProjectList({
   projects,
   loading = false,
   onProjectDeleted,
+  searchMode = false,
 }: ProjectListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -124,13 +127,24 @@ export default function ProjectList({
         >
           <path d="M2 2.5A2.5 2.5 0 014.5 0h8.75a.75.75 0 01.75.75v12.5a.75.75 0 01-.75.75h-2.5a.75.75 0 110-1.5h1.75v-2h-8a1 1 0 00-.714 1.7.75.75 0 01-1.072 1.05A2.495 2.495 0 012 11.5v-9zm10.5-1V9h-8c-.356 0-.694.074-1 .208V2.5a1 1 0 011-1h8zM5 12.25v3.25a.25.25 0 00.4.2l1.45-1.087a.25.25 0 01.3 0L8.6 15.7a.25.25 0 00.4-.2v-3.25a.25.25 0 00-.25-.25h-3.5a.25.25 0 00-.25.25z" />
         </svg>
-        <p className="mt-4 text-forge-ink">还没有项目</p>
-        <p className="mt-1 text-sm text-forge-muted">
-          前往首页描述你的需求，生成第一个项目吧
-        </p>
-        <Link href="/" className="forge-btn-primary mt-4">
-          创建项目
-        </Link>
+        {searchMode ? (
+          <>
+            <p className="mt-4 text-forge-ink">未找到匹配的项目</p>
+            <p className="mt-1 text-sm text-forge-muted">
+              试试调整搜索关键词或筛选条件
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="mt-4 text-forge-ink">还没有项目</p>
+            <p className="mt-1 text-sm text-forge-muted">
+              前往首页描述你的需求，生成第一个项目吧
+            </p>
+            <Link href="/" className="forge-btn-primary mt-4">
+              创建项目
+            </Link>
+          </>
+        )}
       </div>
     );
   }

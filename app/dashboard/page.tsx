@@ -35,7 +35,26 @@ export default function DashboardPage() {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // 搜索与筛选
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   const PAGE_SIZE = 10;
+
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // 状态筛选变化时重置页码
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter]);
 
   const loadProjects = useCallback(
     async (page: number, isRefresh = false) => {
@@ -47,9 +66,15 @@ export default function DashboardPage() {
       setError(null);
 
       try {
-        const res = await fetch(
-          `/api/projects?page=${page}&pageSize=${PAGE_SIZE}`
-        );
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(PAGE_SIZE),
+        });
+        if (debouncedSearch) params.set('search', debouncedSearch);
+        if (statusFilter && statusFilter !== 'all')
+          params.set('status', statusFilter);
+
+        const res = await fetch(`/api/projects?${params.toString()}`);
         if (res.ok) {
           const data = await res.json();
           setProjects(data.projects || []);
@@ -68,7 +93,7 @@ export default function DashboardPage() {
         }
       }
     },
-    []
+    [debouncedSearch, statusFilter]
   );
 
   useEffect(() => {
@@ -91,10 +116,16 @@ export default function DashboardPage() {
 
         setIsLoggedIn(true);
 
-        // 获取项目列表
-        const res = await fetch(
-          `/api/projects?page=1&pageSize=${PAGE_SIZE}`
-        );
+        // 获取项目列表（带搜索和筛选参数）
+        const params = new URLSearchParams({
+          page: '1',
+          pageSize: String(PAGE_SIZE),
+        });
+        if (debouncedSearch) params.set('search', debouncedSearch);
+        if (statusFilter && statusFilter !== 'all')
+          params.set('status', statusFilter);
+
+        const res = await fetch(`/api/projects?${params.toString()}`);
         if (!mounted) return;
 
         if (res.ok) {
@@ -121,7 +152,7 @@ export default function DashboardPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [debouncedSearch, statusFilter]);
 
   // 统计数据
   const total = pagination?.total ?? projects.length;
@@ -272,18 +303,53 @@ export default function DashboardPage() {
 
       {/* 项目列表 */}
       <div>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-forge-ink">我的项目</h2>
-          {pagination && pagination.total > 0 && (
+          {/* 搜索与筛选 */}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <svg
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-forge-muted"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M11.5 7a4.499 4.499 0 11-8.998 0A4.499 4.499 0 0111.5 7zm-.82 4.74a6 6 0 111.06-1.06l3.04 3.04a.75.75 0 11-1.06 1.06l-3.04-3.04z" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索项目..."
+                className="w-48 rounded-lg border border-forge-border bg-forge-bg py-1.5 pl-9 pr-3 text-sm text-forge-ink placeholder-forge-muted focus:border-forge-accent focus:outline-none sm:w-56"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-forge-border bg-forge-bg px-3 py-1.5 text-sm text-forge-ink focus:border-forge-accent focus:outline-none"
+            >
+              <option value="all">全部状态</option>
+              <option value="building">构建中</option>
+              <option value="governing">治理审核</option>
+              <option value="packaging">打包中</option>
+              <option value="done">已完成</option>
+              <option value="failed">失败</option>
+            </select>
+          </div>
+        </div>
+        {pagination && pagination.total > 0 && (
+          <div className="mb-3 text-right">
             <span className="text-sm text-forge-muted">
               共 {pagination.total} 个项目
             </span>
-          )}
-        </div>
+          </div>
+        )}
         <ProjectList
           projects={projects}
           loading={loading}
           onProjectDeleted={() => loadProjects(currentPage, true)}
+          searchMode={!!debouncedSearch || statusFilter !== 'all'}
         />
 
         {/* 分页控件 */}

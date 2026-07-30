@@ -86,6 +86,7 @@ function BuildPageContent() {
   const [loading, setLoading] = useState(true);
   const [allDone, setAllDone] = useState(false);
   const [hasFailed, setHasFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     if (!taskId) {
@@ -146,6 +147,40 @@ function BuildPageContent() {
   const completedCount = steps.filter((s) => s.status === 'success').length;
   const progress = Math.round((completedCount / steps.length) * 100);
 
+  // 重试失败的项目
+  async function handleRetry() {
+    if (retrying) return;
+    setRetrying(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          action: 'retry',
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `重试失败 (${res.status})`);
+      }
+
+      const data = await res.json();
+      // 重置状态并跳转到新的构建进度页
+      setHasFailed(false);
+      setSteps(DEFAULT_STEPS.map((s) => ({ ...s })));
+      setLoading(true);
+      // 使用 window.location 跳转到新的 taskId 页面
+      window.location.href = `/project/${projectId}/build?taskId=${data.taskId}`;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '重试失败');
+      setRetrying(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       {/* 返回导航 */}
@@ -205,14 +240,47 @@ function BuildPageContent() {
           <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-forge-bg p-3 text-sm text-forge-red font-mono">
             {error}
           </pre>
-          {/* 重试按钮 */}
-          <div className="mt-4 flex justify-end">
+          {/* 重试 + 返回按钮 */}
+          <div className="mt-4 flex items-center justify-between">
             <Link
               href={`/project/${projectId}`}
-              className="forge-btn-secondary text-sm"
+              className="text-sm text-forge-muted hover:text-forge-ink transition-colors"
             >
               返回项目详情
             </Link>
+            <button
+              type="button"
+              onClick={handleRetry}
+              disabled={retrying}
+              className="forge-btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {retrying ? (
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="h-4 w-4 animate-forge-spin"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z" />
+                    <path d="M8 3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 3z" />
+                  </svg>
+                  正在重试...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 2.5a5.5 5.5 0 1 1-4.385 2.177.75.75 0 1 0-1.198.902A7 7 0 1 0 8 1V0L4.5 3.5 8 7V2.5z" />
+                  </svg>
+                  重试构建
+                </span>
+              )}
+            </button>
           </div>
         </div>
       )}
