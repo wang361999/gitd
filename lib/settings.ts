@@ -11,6 +11,9 @@ let cache: Map<string, string> | null = null;
 let cacheExpiry = 0;
 const CACHE_TTL = 30_000; // 30秒缓存
 
+// 表是否已初始化的标记
+let tablesInitialized = false;
+
 /** 所有配置项的 key 定义 */
 export const SETTING_KEYS = {
   // GitHub OAuth
@@ -26,7 +29,167 @@ export const SETTING_KEYS = {
   WEBHOOK_SECRET: "WEBHOOK_SECRET",
   // 应用 URL
   APP_URL: "APP_URL",
+  // Admin 密码
+  ADMIN_PASSWORD: "ADMIN_PASSWORD",
 } as const;
+
+/**
+ * 确保所有数据库表已创建
+ * 使用 CREATE TABLE IF NOT EXISTS，幂等操作
+ * 在首次访问数据库时自动调用
+ */
+export async function ensureTablesExist(): Promise<void> {
+  if (tablesInitialized) return;
+
+  try {
+    // settings 表
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "settings" (
+        "key" TEXT NOT NULL,
+        "value" TEXT NOT NULL,
+        "category" TEXT NOT NULL DEFAULT 'general',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "settings_pkey" PRIMARY KEY ("key")
+      );
+    `);
+
+    // users 表
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "users" (
+        "id" TEXT NOT NULL,
+        "githubId" INTEGER NOT NULL,
+        "username" TEXT NOT NULL,
+        "email" TEXT,
+        "avatarUrl" TEXT,
+        "accessToken" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "users_pkey" PRIMARY KEY ("id"),
+        CONSTRAINT "users_githubId_key" UNIQUE ("githubId")
+      );
+    `);
+
+    // projects 表
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "projects" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "description" TEXT NOT NULL,
+        "projectType" TEXT NOT NULL DEFAULT 'web',
+        "repoUrl" TEXT,
+        "repoOwner" TEXT,
+        "repoName" TEXT,
+        "previewUrl" TEXT,
+        "downloadUrl" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'draft',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "projects_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // tasks 表
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "tasks" (
+        "id" TEXT NOT NULL,
+        "projectId" TEXT NOT NULL,
+        "stage" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "log" TEXT,
+        "result" JSONB,
+        "actionsRunId" INTEGER,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "tasks_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // governance_reports 表
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "governance_reports" (
+        "id" TEXT NOT NULL,
+        "taskId" TEXT NOT NULL,
+        "projectId" TEXT NOT NULL,
+        "filePath" TEXT NOT NULL,
+        "source" TEXT NOT NULL,
+        "modelName" TEXT,
+        "lineCount" INTEGER NOT NULL DEFAULT 0,
+        "riskScore" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "issues" JSONB NOT NULL,
+        "reviewed" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "governance_reports_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // lore_records 表
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "lore_records" (
+        "id" TEXT NOT NULL,
+        "projectId" TEXT NOT NULL,
+        "commitSha" TEXT NOT NULL,
+        "context" TEXT NOT NULL,
+        "decision" TEXT NOT NULL,
+        "rejected" TEXT,
+        "constraints" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "lore_records_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // versions 表
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "versions" (
+        "id" TEXT NOT NULL,
+        "projectId" TEXT NOT NULL,
+        "versionTag" TEXT NOT NULL,
+        "releaseUrl" TEXT,
+        "downloadUrl" TEXT,
+        "releaseNotes" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "versions_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // 外键约束（单独添加，避免 IF NOT EXISTS 不支持约束名检查）
+    await prisma.$executeRawUnsafe(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'projects_userId_fkey') THEN
+          ALTER TABLE "projects" ADD CONSTRAINT "projects_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tasks_projectId_fkey') THEN
+          ALTER TABLE "tasks" ADD CONSTRAINT "tasks_projectId_fkey"
+          FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'governance_reports_taskId_fkey') THEN
+          ALTER TABLE "governance_reports" ADD CONSTRAINT "governance_reports_taskId_fkey"
+          FOREIGN KEY ("taskId") REFERENCES "tasks"("id") ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'governance_reports_projectId_fkey') THEN
+          ALTER TABLE "governance_reports" ADD CONSTRAINT "governance_reports_projectId_fkey"
+          FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'lore_records_projectId_fkey') THEN
+          ALTER TABLE "lore_records" ADD CONSTRAINT "lore_records_projectId_fkey"
+          FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'versions_projectId_fkey') THEN
+          ALTER TABLE "versions" ADD CONSTRAINT "versions_projectId_fkey"
+          FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE;
+        END IF;
+      END $$;
+    `);
+
+    tablesInitialized = true;
+  } catch (error) {
+    console.error("[ensureTablesExist] Error creating tables:", error);
+    // 即使出错也标记为已初始化，避免反复尝试
+    tablesInitialized = true;
+  }
+}
 
 /** 从数据库加载所有配置到缓存 */
 async function loadSettings(): Promise<Map<string, string>> {
@@ -34,15 +197,24 @@ async function loadSettings(): Promise<Map<string, string>> {
     return cache;
   }
 
-  const rows = await prisma.setting.findMany();
-  const map = new Map<string, string>();
-  for (const row of rows) {
-    map.set(row.key, row.value);
-  }
+  await ensureTablesExist();
 
-  cache = map;
-  cacheExpiry = Date.now() + CACHE_TTL;
-  return map;
+  try {
+    const rows = await prisma.setting.findMany();
+    const map = new Map<string, string>();
+    for (const row of rows) {
+      map.set(row.key, row.value);
+    }
+    cache = map;
+    cacheExpiry = Date.now() + CACHE_TTL;
+    return map;
+  } catch (error) {
+    // 如果查询失败，返回空 Map（回退到环境变量）
+    console.error("[loadSettings] Error loading settings:", error);
+    cache = new Map();
+    cacheExpiry = Date.now() + CACHE_TTL;
+    return cache;
+  }
 }
 
 /** 获取单个配置项，优先从数据库读取，回退到环境变量 */
@@ -94,6 +266,8 @@ export async function isConfigured(): Promise<boolean> {
 
 /** 批量保存配置到数据库 */
 export async function saveSettings(settings: Record<string, string>): Promise<void> {
+  await ensureTablesExist();
+
   const promises = Object.entries(settings).map(([key, value]) =>
     prisma.setting.upsert({
       where: { key },
