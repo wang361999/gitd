@@ -75,7 +75,10 @@ jobs:
       - name: 8. 聚合生成治理报告
         run: node forge-scripts/scripts/generate-report.js
 
-      - name: 9. 上传治理报告到目标仓库 Releases
+      - name: 9. 聚合治理数据（供回调写入数据库）
+        run: node forge-scripts/scripts/collect-governance.js > governance-data.json
+
+      - name: 10. 上传治理报告到目标仓库 Releases
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -96,19 +99,42 @@ jobs:
             echo "未找到治理报告文件，跳过上传"
           fi
 
-      - name: 10. 回调通知完成
+      - name: 11. 回调通知完成（含治理数据）
         if: always()
         env:
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
           STATUS="${{ job.status }}"
           echo "治理任务 ${{ inputs.task_id }} 状态: ${STATUS}"
-          curl -s -X POST "${{ inputs.callback_url }}" \
-            -H "Content-Type: application/json" \
-            -H "X-Webhook-Secret: ${WEBHOOK_SECRET}" \
-            -d "{
-              \"taskId\": \"${{ inputs.task_id }}\",
-              \"stage\": \"governance\",
-              \"status\": \"${STATUS}\"
-            }"
+
+          # 使用 Node.js 构建并发送回调（包含治理数据）
+          node -e "
+          const fs = require('fs');
+          let governanceData = {};
+          try {
+            governanceData = JSON.parse(fs.readFileSync('governance-data.json', 'utf8'));
+          } catch (e) {
+            console.log('未找到治理数据文件，发送空结果');
+          }
+
+          const payload = {
+            taskId: '${{ inputs.task_id }}',
+            stage: 'governance',
+            status: '${STATUS}',
+            result: governanceData
+          };
+
+          fetch('${{ inputs.callback_url }}', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Webhook-Secret': process.env.WEBHOOK_SECRET
+            },
+            body: JSON.stringify(payload)
+          }).then(r => {
+            console.log('回调发送完成, HTTP', r.status);
+          }).catch(e => {
+            console.error('回调发送失败:', e.message);
+          });
+          "
           echo "回调通知已发送"

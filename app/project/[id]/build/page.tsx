@@ -17,68 +17,56 @@ interface BuildResult {
 }
 
 interface StatusResponse {
+  /** 任务状态: pending | running | success | failed */
   status: string;
-  currentStep?: number;
-  stepStatus?: StepStatus;
-  steps?: { key: string; status: StepStatus }[];
+  /** 任务阶段: generate | governance | package */
+  stage: string;
+  /** 进度 1-7 */
+  progress: number;
+  /** 项目状态: building | governing | packaging | done | failed */
+  projectStatus: string;
   result?: BuildResult;
-  error?: string;
+  logs?: string;
 }
 
-/** 将 API 返回的状态映射到 7 步进度 */
-function mapStepsFromStatus(
-  data: StatusResponse,
+/**
+ * 根据 API 返回的 progress (1-7) 和 status 映射到 7 步 UI 进度
+ *
+ * progress 含义:
+ *   1: generate pending    -> step 0 (analyze) running
+ *   2: generate running    -> step 0 success, step 1 (generate) running
+ *   3: generate success    -> steps 0-2 success, step 3 pending
+ *   4: governance running  -> steps 0-2 success, step 3 (review) running
+ *   5: governance success  -> steps 0-4 success, step 5 pending
+ *   6: package running     -> steps 0-4 success, step 5 (package) running
+ *   7: package success     -> all success
+ */
+function mapStepsFromProgress(
+  progress: number,
+  taskStatus: string,
   currentSteps: BuildStep[]
 ): BuildStep[] {
   const steps = currentSteps.map((s) => ({ ...s }));
 
-  // 如果 API 返回了 steps 数组，直接使用
-  if (data.steps && Array.isArray(data.steps)) {
-    const stepMap = new Map(data.steps.map((s) => [s.key, s.status]));
-    return steps.map((s) => ({
-      ...s,
-      status: stepMap.get(s.key) || s.status,
-    }));
-  }
-
-  // 否则根据 currentStep 和 stepStatus 推断
-  if (data.status === 'done') {
+  // 全部完成
+  if (progress >= 7 || taskStatus === 'success') {
     return steps.map((s) => ({ ...s, status: 'success' as StepStatus }));
   }
 
-  if (data.status === 'failed') {
-    return steps.map((s, index) => {
-      if (data.currentStep !== undefined && index < data.currentStep) {
-        return { ...s, status: 'success' as StepStatus };
-      }
-      if (data.currentStep !== undefined && index === data.currentStep) {
-        return { ...s, status: 'failed' as StepStatus };
-      }
-      return s;
-    });
-  }
-
-  // building / governing / packaging 状态
-  const stageToStepIndex: Record<string, number> = {
-    building: 1,
-    governing: 4,
-    packaging: 5,
-  };
-
-  const currentIndex =
-    data.currentStep !== undefined
-      ? data.currentStep
-      : stageToStepIndex[data.status] ?? 0;
+  // 根据进度值映射
+  // progress 1-7 对应 7 个步骤，当前步骤为 running，之前的为 success
+  const currentIndex = Math.max(0, Math.min(progress - 1, steps.length - 1));
 
   return steps.map((s, index) => {
     if (index < currentIndex) {
       return { ...s, status: 'success' as StepStatus };
     }
     if (index === currentIndex) {
-      return {
-        ...s,
-        status: (data.stepStatus || 'running') as StepStatus,
-      };
+      if (taskStatus === 'failed') {
+        return { ...s, status: 'failed' as StepStatus };
+      }
+      // pending 或 running 都显示为 running
+      return { ...s, status: 'running' as StepStatus };
     }
     return s;
   });
@@ -114,15 +102,22 @@ function BuildPageContent() {
 
       const data: StatusResponse = await res.json();
 
-      setSteps((prev) => mapStepsFromStatus(data, prev));
+      // 使用 progress 和 task status 映射步骤
+      setSteps((prev) =>
+        mapStepsFromProgress(data.progress || 1, data.status, prev)
+      );
 
-      if (data.status === 'done') {
+      // 使用 projectStatus 判断整体完成/失败
+      if (data.projectStatus === 'done') {
         setAllDone(true);
         setResult(data.result || null);
         setLoading(false);
-      } else if (data.status === 'failed') {
+      } else if (
+        data.projectStatus === 'failed' ||
+        data.status === 'failed'
+      ) {
         setHasFailed(true);
-        setError(data.error || '构建失败');
+        setError(data.logs || '构建失败，请查看日志或稍后重试');
         setLoading(false);
       }
     } catch (e) {
@@ -210,6 +205,15 @@ function BuildPageContent() {
           <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-forge-bg p-3 text-sm text-forge-red font-mono">
             {error}
           </pre>
+          {/* 重试按钮 */}
+          <div className="mt-4 flex justify-end">
+            <Link
+              href={`/project/${projectId}`}
+              className="forge-btn-secondary text-sm"
+            >
+              返回项目详情
+            </Link>
+          </div>
         </div>
       )}
 

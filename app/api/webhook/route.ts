@@ -5,9 +5,23 @@ import { triggerWorkflow } from "@/lib/github";
 import { getSetting, getAppUrl, getForgeRepo, SETTING_KEYS, ensureTablesExist } from "@/lib/settings";
 
 /**
+ * 将 GitHub Actions 的 job.status 归一化为 TaskStatus 枚举值
+ * GitHub Actions: success | failure | cancelled | skipped
+ * 数据库枚举:     success | failed
+ */
+function normalizeStatus(rawStatus: string): TaskStatus {
+  if (rawStatus === "success") return TaskStatus.success;
+  // failure / cancelled / skipped 均视为失败
+  return TaskStatus.failed;
+}
+
+/**
  * Webhook 路由 (POST)
  * 接收 GitHub Actions 完成回调
  * 验证 X-Webhook-Secret，更新 Task，并按阶段流转触发下一阶段工作流
+ *
+ * 治理阶段回调可携带 result.governanceReports 和 result.loreRecords，
+ * 本路由会将其写入 GovernanceReport 和 LoreRecord 表。
  */
 export async function POST(request: Request) {
   try {
@@ -22,9 +36,13 @@ export async function POST(request: Request) {
 
     // -------------------- 解析请求体 --------------------
     const body = await request.json();
-    const { taskId, stage, status, log, result } = body ?? {};
+    const { taskId, stage, log, result } = body ?? {};
 
-    if (!taskId || !stage || !status) {
+    // 归一化状态：GitHub Actions 用 failure/cancelled，数据库用 failed
+    const rawStatus = body?.status as string;
+    const status = normalizeStatus(rawStatus || "");
+
+    if (!taskId || !stage || !rawStatus) {
       return NextResponse.json(
         { error: "Missing required fields: taskId, stage, status" },
         { status: 400 }
@@ -57,7 +75,7 @@ export async function POST(request: Request) {
     });
 
     // -------------------- 成功：按阶段流转 --------------------
-    if (status === "success") {
+    if (status === TaskStatus.success) {
       if (stage === "generate") {
         // generate 成功 -> governing，触发 governance.yml
         // 如果 result 中包含 repoUrl/previewUrl，更新到 project
@@ -105,6 +123,83 @@ export async function POST(request: Request) {
           });
         }
       } else if (stage === "governance") {
+        // -------------------- 治理数据入库 --------------------
+        // 从回调 result 中提取治理报告和决策记录，写入数据库
+        // 失败不阻塞主流程，仅记录日志
+        if (result?.governanceReports && Array.isArray(result.governanceReports)) {
+          try {
+            // 先清除该项目旧的治理报告（避免重复）
+            await prisma.governanceReport.deleteMany({
+              where: { projectId: project.id },
+            });
+
+            // 批量创建治理报告
+            const reports = result.governanceReports.map(
+              (report: {
+                filePath: string;
+                source: string;
+                modelName?: string | null;
+                lineCount?: number;
+                riskScore?: number;
+                issues?: unknown;
+              }) => ({
+                taskId,
+                projectId: project.id,
+                filePath: report.filePath || "unknown",
+                source: report.source || "unknown",
+                modelName: report.modelName || null,
+                lineCount: report.lineCount || 0,
+                riskScore: report.riskScore || 0,
+                issues: report.issues ?? [],
+              })
+            );
+
+            if (reports.length > 0) {
+              await prisma.governanceReport.createMany({ data: reports });
+              console.log(`[webhook] 写入 ${reports.length} 条治理报告`);
+            }
+          } catch (govError) {
+            console.error("[webhook] 治理报告入库失败:", govError);
+          }
+        }
+
+        if (result?.loreRecords && Array.isArray(result.loreRecords)) {
+          try {
+            // 先清除该项目旧的决策记录
+            await prisma.loreRecord.deleteMany({
+              where: { projectId: project.id },
+            });
+
+            const loreRecords = result.loreRecords
+              .filter(
+                (r: { commitSha?: string }) => r?.commitSha
+              )
+              .map(
+                (r: {
+                  commitSha: string;
+                  context?: string;
+                  decision?: string;
+                  rejected?: string | null;
+                  constraints?: string | null;
+                }) => ({
+                  projectId: project.id,
+                  commitSha: r.commitSha,
+                  context: r.context || "",
+                  decision: r.decision || "",
+                  rejected: r.rejected || null,
+                  constraints: r.constraints || null,
+                })
+              );
+
+            if (loreRecords.length > 0) {
+              await prisma.loreRecord.createMany({ data: loreRecords });
+              console.log(`[webhook] 写入 ${loreRecords.length} 条决策记录`);
+            }
+          } catch (loreError) {
+            console.error("[webhook] 决策记录入库失败:", loreError);
+          }
+        }
+
         // governance 成功 -> packaging，触发 package.yml
         await prisma.project.update({
           where: { id: project.id },
@@ -166,7 +261,7 @@ export async function POST(request: Request) {
           });
         }
       }
-    } else if (status === "failed") {
+    } else if (status === TaskStatus.failed) {
       // -------------------- 失败：标记项目为 failed --------------------
       await prisma.project.update({
         where: { id: project.id },
