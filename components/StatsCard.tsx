@@ -3,7 +3,7 @@
 interface StatsCardProps {
   label: string;
   value: number;
-  icon?: 'total' | 'success' | 'failed';
+  icon?: 'total' | 'success' | 'failed' | 'progress';
 }
 
 const ICONS: Record<NonNullable<StatsCardProps['icon']>, React.ReactElement> = {
@@ -37,6 +37,16 @@ const ICONS: Record<NonNullable<StatsCardProps['icon']>, React.ReactElement> = {
       <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z" />
     </svg>
   ),
+  progress: (
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0zM8 3a.75.75 0 01.75.75v3.546l3.04 1.755a.75.75 0 01-.75 1.299l-3.415-1.972A.75.75 0 017.25 8V3.75A.75.75 0 018 3z" />
+    </svg>
+  ),
 };
 
 const COLOR_MAP = {
@@ -51,6 +61,10 @@ const COLOR_MAP = {
   failed: {
     iconBg: 'bg-forge-red/10',
     iconText: 'text-forge-red',
+  },
+  progress: {
+    iconBg: 'bg-forge-yellow/10',
+    iconText: 'text-forge-yellow',
   },
 };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import ProjectList from '@/components/ProjectList';
 import StatsCard from '@/components/StatsCard';
@@ -13,13 +13,63 @@ interface Project {
   status: string;
   repoUrl: string | null;
   previewUrl: string | null;
+  downloadUrl: string | null;
   createdAt: string;
+  updatedAt: string;
+}
+
+interface Pagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 }
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const PAGE_SIZE = 10;
+
+  const loadProjects = useCallback(
+    async (page: number, isRefresh = false) => {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      try {
+        const res = await fetch(
+          `/api/projects?page=${page}&pageSize=${PAGE_SIZE}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setProjects(data.projects || []);
+          setPagination(data.pagination || null);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error || '加载项目列表失败');
+        }
+      } catch {
+        setError('网络错误，请稍后重试');
+      } finally {
+        if (isRefresh) {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -33,21 +83,32 @@ export default function DashboardPage() {
         if (!mounted) return;
 
         if (!authData.isLoggedIn) {
+          setIsLoggedIn(false);
           setAuthChecked(true);
           setLoading(false);
           return;
         }
 
+        setIsLoggedIn(true);
+
         // 获取项目列表
-        const res = await fetch('/api/projects');
+        const res = await fetch(
+          `/api/projects?page=1&pageSize=${PAGE_SIZE}`
+        );
+        if (!mounted) return;
+
         if (res.ok) {
           const data = await res.json();
-          if (mounted) {
-            setProjects(data.projects || []);
-          }
+          setProjects(data.projects || []);
+          setPagination(data.pagination || null);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error || '加载项目列表失败');
         }
       } catch {
-        // 忽略错误
+        if (mounted) {
+          setError('网络错误，请稍后重试');
+        }
       } finally {
         if (mounted) {
           setAuthChecked(true);
@@ -63,22 +124,55 @@ export default function DashboardPage() {
   }, []);
 
   // 统计数据
-  const total = projects.length;
+  const total = pagination?.total ?? projects.length;
   const successCount = projects.filter((p) => p.status === 'done').length;
   const failedCount = projects.filter((p) => p.status === 'failed').length;
+  const inProgressCount = projects.filter(
+    (p) => ['building', 'governing', 'packaging'].includes(p.status)
+  ).length;
 
-  // 未登录提示
-  if (authChecked && !loading && projects.length === 0 && total === 0) {
-    // 二次确认是否真的未登录（区分无项目和未登录）
+  const handleRefresh = () => {
+    loadProjects(currentPage, true);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    loadProjects(page);
+  };
+
+  // 加载中状态
+  if (loading && !authChecked) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-forge-ink">仪表盘</h1>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatsCard label="项目总数" value={0} icon="total" />
-          <StatsCard label="构建成功" value={0} icon="success" />
-          <StatsCard label="构建失败" value={0} icon="failed" />
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="forge-card h-24 animate-forge-pulse p-5"
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="forge-card h-40 animate-forge-pulse p-5"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 未登录提示
+  if (authChecked && !isLoggedIn) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-forge-ink">仪表盘</h1>
         </div>
         <div className="forge-card flex flex-col items-center justify-center py-16 text-center">
           <svg
@@ -108,31 +202,138 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-forge-ink">仪表盘</h1>
-        <Link href="/" className="forge-btn-primary text-sm">
-          <svg
-            className="h-4 w-4"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            aria-hidden="true"
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-forge-ink">仪表盘</h1>
+          {refreshing && (
+            <span className="text-sm text-forge-muted">刷新中...</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="forge-btn-secondary text-sm disabled:opacity-50"
+            title="刷新项目列表"
           >
-            <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 110 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z" />
-          </svg>
-          新建项目
-        </Link>
+            <svg
+              className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M8 2.5a5.5 5.5 0 1 1-4.385 2.177.75.75 0 1 0-1.198.902A7 7 0 1 0 8 1V0L4.5 3.5 8 7V2.5z" />
+            </svg>
+            刷新
+          </button>
+          <Link href="/" className="forge-btn-primary text-sm">
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 110 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z" />
+            </svg>
+            新建项目
+          </Link>
+        </div>
       </div>
 
+      {/* 错误提示 */}
+      {error && (
+        <div className="flex items-center justify-between rounded-lg border border-forge-red/30 bg-forge-red/5 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-forge-red">
+            <svg
+              className="h-4 w-4 flex-shrink-0"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0114.082 15H1.918a1.75 1.75 0 01-1.543-2.575L6.457 1.047zM8 5a.75.75 0 01.75.75v2.5a.75.75 0 01-1.5 0v-2.5A.75.75 0 018 5zm1 6a1 1 0 11-2 0 1 1 0 012 0z" />
+            </svg>
+            {error}
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="text-sm text-forge-red hover:underline"
+          >
+            重试
+          </button>
+        </div>
+      )}
+
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatsCard label="项目总数" value={total} icon="total" />
         <StatsCard label="构建成功" value={successCount} icon="success" />
         <StatsCard label="构建失败" value={failedCount} icon="failed" />
+        <StatsCard label="进行中" value={inProgressCount} icon="progress" />
       </div>
 
       {/* 项目列表 */}
       <div>
-        <h2 className="mb-4 text-lg font-semibold text-forge-ink">我的项目</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-forge-ink">我的项目</h2>
+          {pagination && pagination.total > 0 && (
+            <span className="text-sm text-forge-muted">
+              共 {pagination.total} 个项目
+            </span>
+          )}
+        </div>
         <ProjectList projects={projects} loading={loading} />
+
+        {/* 分页控件 */}
+        {pagination && pagination.totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-center gap-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage <= 1 || loading}
+              className="forge-btn-secondary px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              上一页
+            </button>
+            {Array.from(
+              { length: pagination.totalPages },
+              (_, i) => i + 1
+            )
+              .filter(
+                (page) =>
+                  page === 1 ||
+                  page === pagination.totalPages ||
+                  Math.abs(page - currentPage) <= 1
+              )
+              .map((page, idx, arr) => {
+                const showEllipsisBefore =
+                  idx > 0 && page - arr[idx - 1] > 1;
+                return (
+                  <span key={page} className="flex items-center gap-1">
+                    {showEllipsisBefore && (
+                      <span className="px-2 text-forge-muted">...</span>
+                    )}
+                    <button
+                      onClick={() => handlePageChange(page)}
+                      className={`h-8 min-w-8 rounded-md px-2 text-sm transition-colors ${
+                        page === currentPage
+                          ? 'bg-forge-accent text-white'
+                          : 'text-forge-ink hover:bg-forge-surface'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </span>
+                );
+              })}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={
+                currentPage >= pagination.totalPages || loading
+              }
+              className="forge-btn-secondary px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              下一页
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
