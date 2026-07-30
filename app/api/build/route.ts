@@ -17,6 +17,11 @@ import { getAppUrl, getForgeRepo } from "@/lib/settings";
  *   body: { projectId, action: "repackage" }
  *   流程：校验归属 -> 更新状态为 packaging -> 创建 Task -> 触发 package.yml
  *   返回 { projectId, taskId }
+ *
+ * 模式 C — 重试失败阶段:
+ *   body: { projectId, action: "retry" }
+ *   流程：校验归属 -> 查找最新失败 Task -> 确定失败阶段 -> 重新触发对应 workflow
+ *   返回 { projectId, taskId }
  */
 export async function POST(request: Request) {
   // 在 try 外声明，便于出错时回滚项目状态
@@ -104,6 +109,212 @@ export async function POST(request: Request) {
       });
 
       return NextResponse.json({ projectId: pid, taskId: task.id });
+    }
+
+    // ================================================================
+    // 模式 C：重试失败阶段
+    // ================================================================
+    if (action === "retry" && body.projectId) {
+      const pid = body.projectId as string;
+
+      const project = await prisma.project.findUnique({
+        where: { id: pid },
+        select: {
+          id: true,
+          userId: true,
+          name: true,
+          description: true,
+          projectType: true,
+          repoOwner: true,
+          repoName: true,
+          repoUrl: true,
+          status: true,
+        },
+      });
+
+      if (!project) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+
+      if (project.userId !== session.userId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      if (project.status !== "failed") {
+        return NextResponse.json(
+          { error: "只有失败的项目可以重试" },
+          { status: 400 }
+        );
+      }
+
+      // 查找最新的失败 Task，确定重试哪个阶段
+      const failedTask = await prisma.task.findFirst({
+        where: { projectId: pid, status: "failed" },
+        orderBy: { createdAt: "desc" },
+      });
+
+      const retryStage = failedTask?.stage || "generate";
+
+      const appUrl = await getAppUrl();
+      const callbackUrl = `${appUrl}/api/webhook`;
+      const forgeRepo = await getForgeRepo();
+
+      // 根据失败阶段触发对应 workflow
+      if (retryStage === "generate") {
+        // generate 失败：需要仓库信息
+        let repoOwner = project.repoOwner;
+        let repoName = project.repoName;
+
+        // 如果没有仓库信息，尝试创建新仓库
+        if (!repoOwner || !repoName) {
+          const repoSlug = slugify(project.name);
+          const repo = await createRepo(repoSlug, project.description, true);
+          repoOwner = repo.owner;
+          repoName = repo.repo;
+
+          await prisma.project.update({
+            where: { id: pid },
+            data: {
+              repoUrl: repo.html_url,
+              repoOwner,
+              repoName,
+              status: ProjectStatus.building,
+            },
+          });
+        } else {
+          await prisma.project.update({
+            where: { id: pid },
+            data: { status: ProjectStatus.building },
+          });
+        }
+
+        const task = await prisma.task.create({
+          data: {
+            projectId: pid,
+            stage: TaskStage.generate,
+            status: TaskStatus.pending,
+          },
+        });
+
+        const runId = await triggerWorkflow(
+          forgeRepo.owner,
+          forgeRepo.name,
+          "generate.yml",
+          "main",
+          {
+            requirement: project.description,
+            project_type: project.projectType || "web",
+            project_name: project.name,
+            repo_owner: repoOwner,
+            repo_name: repoName,
+            task_id: task.id,
+            callback_url: callbackUrl,
+          }
+        );
+
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { actionsRunId: runId, status: TaskStatus.running },
+        });
+
+        return NextResponse.json({ projectId: pid, taskId: task.id });
+      }
+
+      if (retryStage === "governance") {
+        // governance 失败：仓库已存在
+        if (!project.repoOwner || !project.repoName) {
+          return NextResponse.json(
+            { error: "项目缺少仓库信息，无法重试治理" },
+            { status: 400 }
+          );
+        }
+
+        await prisma.project.update({
+          where: { id: pid },
+          data: { status: ProjectStatus.governing },
+        });
+
+        const task = await prisma.task.create({
+          data: {
+            projectId: pid,
+            stage: TaskStage.governance,
+            status: TaskStatus.pending,
+          },
+        });
+
+        const runId = await triggerWorkflow(
+          forgeRepo.owner,
+          forgeRepo.name,
+          "governance.yml",
+          "main",
+          {
+            repo_owner: project.repoOwner,
+            repo_name: project.repoName,
+            task_id: task.id,
+            callback_url: callbackUrl,
+          }
+        );
+
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { actionsRunId: runId, status: TaskStatus.running },
+        });
+
+        return NextResponse.json({ projectId: pid, taskId: task.id });
+      }
+
+      if (retryStage === "package") {
+        // package 失败：等同于重新打包
+        if (!project.repoOwner || !project.repoName) {
+          return NextResponse.json(
+            { error: "项目缺少仓库信息，无法重试打包" },
+            { status: 400 }
+          );
+        }
+
+        await prisma.project.update({
+          where: { id: pid },
+          data: { status: ProjectStatus.packaging },
+        });
+
+        const task = await prisma.task.create({
+          data: {
+            projectId: pid,
+            stage: TaskStage.package,
+            status: TaskStatus.pending,
+          },
+        });
+
+        const runId = await triggerWorkflow(
+          forgeRepo.owner,
+          forgeRepo.name,
+          "package.yml",
+          "main",
+          {
+            project_type: project.projectType || "web",
+            project_name: project.name,
+            repo_owner: project.repoOwner,
+            repo_name: project.repoName,
+            task_id: task.id,
+            callback_url: callbackUrl,
+          }
+        );
+
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { actionsRunId: runId, status: TaskStatus.running },
+        });
+
+        return NextResponse.json({ projectId: pid, taskId: task.id });
+      }
+
+      return NextResponse.json(
+        { error: "无法确定重试阶段" },
+        { status: 400 }
+      );
     }
 
     // ================================================================

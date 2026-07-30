@@ -280,7 +280,11 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        <ProjectList projects={projects} loading={loading} />
+        <ProjectList
+          projects={projects}
+          loading={loading}
+          onProjectDeleted={() => loadProjects(currentPage, true)}
+        />
 
         {/* 分页控件 */}
         {pagination && pagination.totalPages > 1 && (

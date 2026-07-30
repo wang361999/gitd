@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ResultDisplay from '@/components/ResultDisplay';
 import DownloadPanel from '@/components/build/DownloadPanel';
@@ -81,45 +81,111 @@ function formatDateTime(iso: string): string {
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.id as string;
 
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [retrying, setRetrying] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const loadProject = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects?id=${projectId}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError('请先登录');
+        } else if (res.status === 404) {
+          setError('项目不存在');
+        } else {
+          setError(`加载失败 (${res.status})`);
+        }
+        return;
+      }
+      const data = await res.json();
+      setProject(data.project || data);
+    } catch {
+      setError('网络错误，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
 
   useEffect(() => {
-    let mounted = true;
+    loadProject();
+  }, [loadProject]);
 
-    async function loadProject() {
-      try {
-        const res = await fetch(`/api/projects?id=${projectId}`);
-        if (!res.ok) {
-          if (res.status === 401) {
-            setError('请先登录');
-          } else if (res.status === 404) {
-            setError('项目不存在');
-          } else {
-            setError(`加载失败 (${res.status})`);
-          }
-          return;
-        }
-        const data = await res.json();
-        if (mounted) {
-          setProject(data.project || data);
-        }
-      } catch {
-        if (mounted) setError('网络错误，请稍后重试');
-      } finally {
-        if (mounted) setLoading(false);
+  // 构建中状态自动轮询（每 5 秒刷新）
+  useEffect(() => {
+    if (!project) return;
+    const isBuilding = ['building', 'governing', 'packaging'].includes(
+      project.status
+    );
+    if (!isBuilding) return;
+
+    const interval = setInterval(() => {
+      loadProject();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [project?.status, loadProject]);
+
+  // 重试失败的项目
+  async function handleRetry() {
+    if (!project || retrying) return;
+    setRetrying(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          action: 'retry',
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `重试失败 (${res.status})`);
       }
+
+      const data = await res.json();
+      // 跳转到构建进度页面
+      router.push(`/project/${project.id}/build?taskId=${data.taskId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '重试失败');
+      setRetrying(false);
+    }
+  }
+
+  // 删除项目
+  async function handleDelete() {
+    if (!project || deleting) return;
+    if (!window.confirm(`确定要删除项目「${project.name}」吗？此操作不可撤销。`)) {
+      return;
     }
 
-    loadProject();
-    return () => {
-      mounted = false;
-    };
-  }, [projectId]);
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/projects?id=${project.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `删除失败 (${res.status})`);
+      }
+
+      router.push('/dashboard');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '删除失败');
+      setDeleting(false);
+    }
+  }
 
   // 加载中
   if (loading) {
@@ -207,12 +273,42 @@ export default function ProjectDetailPage() {
               {project.description}
             </p>
           </div>
-          <span
-            className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-forge-border px-3 py-1.5 text-sm ${status.color}`}
-          >
-            <span className={`h-2 w-2 rounded-full ${status.dot}`} />
-            {status.label}
-          </span>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border border-forge-border px-3 py-1.5 text-sm ${status.color}`}
+            >
+              <span className={`h-2 w-2 rounded-full ${status.dot}`} />
+              {status.label}
+            </span>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              title="删除项目"
+              className="rounded-lg border border-forge-border p-2 text-forge-muted transition-colors hover:border-forge-red/50 hover:text-forge-red"
+            >
+              {deleting ? (
+                <svg
+                  className="h-4 w-4 animate-forge-spin"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z" />
+                  <path d="M8 3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 3z" />
+                </svg>
+              ) : (
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M11 1.75V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.75 1.75 0 0110.595 15h-5.19a1.75 1.75 0 01-1.741-1.575l-.66-6.6a.75.75 0 011.492-.15z" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* 元信息 */}
@@ -272,26 +368,66 @@ export default function ProjectDetailPage() {
 
       {/* 失败重试 */}
       {project.status === 'failed' && (
-        <div className="forge-card flex items-center justify-between border-forge-red/30 p-4">
-          <div className="flex items-center gap-3">
-            <svg
-              className="h-5 w-5 text-forge-red"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM6.75 5.75a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zM8 12a1 1 0 100-2 1 1 0 000 2z" />
-            </svg>
-            <span className="text-sm text-forge-red">
-              项目构建失败
-            </span>
+        <div className="forge-card border-forge-red/30 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <svg
+                className="h-5 w-5 text-forge-red"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM6.75 5.75a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zM8 12a1 1 0 100-2 1 1 0 000 2z" />
+              </svg>
+              <span className="text-sm text-forge-red">
+                项目构建失败
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/project/${project.id}/build`}
+                className="forge-btn-secondary text-sm"
+              >
+                查看详情
+              </Link>
+              <button
+                type="button"
+                onClick={handleRetry}
+                disabled={retrying}
+                className="forge-btn-accent text-sm"
+              >
+                {retrying ? (
+                  <>
+                    <svg
+                      className="h-4 w-4 animate-forge-spin"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z" />
+                      <path d="M8 3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 3z" />
+                    </svg>
+                    重试中...
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="h-4 w-4"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M1.705 8.005a.75.75 0 01.834.656 5.5 5.5 0 009.592 2.97l-1.204-1.204a.25.25 0 01.177-.427h3.646a.25.25 0 01.25.25v3.646a.25.25 0 01-.427.177l-1.38-1.38A7.002 7.002 0 011.05 8.84a.75.75 0 01.656-.834zM8 2.5a5.487 5.487 0 00-4.131 1.869l1.204 1.204A.25.25 0 014.896 6H1.25A.25.25 0 011 5.75V2.104a.25.25 0 01.427-.177l1.38 1.38A7.002 7.002 0 0114.95 7.16a.75.75 0 01-1.49.178A5.5 5.5 0 008 2.5z" />
+                    </svg>
+                    重试构建
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-          <Link
-            href={`/project/${project.id}/build`}
-            className="forge-btn-secondary text-sm"
-          >
-            查看详情
-          </Link>
+          {error && (
+            <p className="mt-2 text-xs text-forge-red">{error}</p>
+          )}
         </div>
       )}
 
