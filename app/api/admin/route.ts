@@ -4,6 +4,7 @@ import {
   getSetting,
   saveSettings,
   clearSettingsCache,
+  ensureTablesExist,
   SETTING_KEYS,
 } from "@/lib/settings";
 
@@ -122,6 +123,8 @@ function buildLogoutResponse() {
 // ============================================================
 export async function GET(request: Request) {
   try {
+    await ensureTablesExist();
+
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action") || "status";
 
