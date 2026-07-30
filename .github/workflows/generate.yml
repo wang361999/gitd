@@ -51,7 +51,7 @@ jobs:
           cache: npm
 
       - name: 3. 安装依赖
-        run: npm ci
+        run: npm ci || npm install
 
       - name: 4. 生成项目代码
         id: generate

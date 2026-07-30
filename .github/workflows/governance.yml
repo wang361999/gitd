@@ -75,19 +75,26 @@ jobs:
       - name: 8. 聚合生成治理报告
         run: node forge-scripts/scripts/generate-report.js
 
-      - name: 9. 上传治理报告到 GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: governance-${{ github.run_id }}
-          name: 治理报告 ${{ inputs.repo_name }}
-          body: "自动生成的治理报告，包含来源溯源、安全检查与决策时间线。"
-          files: |
-            .forge/governance-report.html
-            .forge/provenance.json
-            .forge/security-report.json
-            .lore/decisions.jsonl
+      - name: 9. 上传治理报告到目标仓库 Releases
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          # 收集存在的治理报告文件
+          FILES=""
+          for f in .forge/governance-report.html .forge/provenance.json .forge/security-report.json .lore/decisions.jsonl; do
+            [ -f "$f" ] && FILES="$FILES $f"
+          done
+          
+          if [ -n "$FILES" ]; then
+            gh release create "governance-${{ github.run_id }}" \
+              --repo "${{ inputs.repo_owner }}/${{ inputs.repo_name }}" \
+              --title "治理报告 ${{ inputs.repo_name }}" \
+              --notes "自动生成的治理报告，包含来源溯源、安全检查与决策时间线。" \
+              $FILES
+            echo "治理报告已上传到目标仓库"
+          else
+            echo "未找到治理报告文件，跳过上传"
+          fi
 
       - name: 10. 回调通知完成
         if: always()
