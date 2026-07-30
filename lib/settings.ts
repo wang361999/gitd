@@ -31,6 +31,9 @@ export const SETTING_KEYS = {
   APP_URL: "APP_URL",
   // Admin 密码
   ADMIN_PASSWORD: "ADMIN_PASSWORD",
+  // Agent Forge 仓库信息（存放 workflow 文件的仓库）
+  FORGE_REPO_OWNER: "FORGE_REPO_OWNER",
+  FORGE_REPO_NAME: "FORGE_REPO_NAME",
 } as const;
 
 /**
@@ -316,6 +319,18 @@ export async function getAppUrl(): Promise<string> {
     `https://${process.env.VERCEL_URL}` ||
     "http://localhost:3000"
   );
+}
+
+/** 获取 Agent Forge 仓库信息（存放 workflow 的仓库） */
+export async function getForgeRepo(): Promise<{ owner: string; name: string }> {
+  const owner = await getSetting(SETTING_KEYS.FORGE_REPO_OWNER);
+  const name = await getSetting(SETTING_KEYS.FORGE_REPO_NAME);
+  if (!owner || !name) {
+    throw new Error(
+      "Forge 仓库信息未配置，请在后台设置 FORGE_REPO_OWNER 和 FORGE_REPO_NAME"
+    );
+  }
+  return { owner, name };
 }
 
 /** 清除缓存（配置更新后调用） */

@@ -35,6 +35,7 @@ const SKIP_DIRS = new Set([
   ".lore",
   "release-artifacts",
   "coverage",
+  "forge-scripts",
 ]);
 
 /** 需要扫描的文件扩展名 */

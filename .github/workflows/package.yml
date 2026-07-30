@@ -44,12 +44,21 @@ jobs:
           repository: ${{ inputs.repo_owner }}/${{ inputs.repo_name }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: 2. 设置 Node.js 18
+      - name: 2. Checkout Agent Forge 脚本
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.FORGE_REPO || 'wang361999/gitd' }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: ./forge-scripts
+          sparse-checkout: |
+            scripts
+
+      - name: 3. 设置 Node.js 18
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: 3. 安装依赖并构建项目
+      - name: 4. 安装依赖并构建项目
         run: |
           if [ -f package.json ]; then
             npm ci || npm install
@@ -58,17 +67,17 @@ jobs:
             echo "未找到 package.json，跳过构建"
           fi
 
-      - name: 4. 执行打包策略
+      - name: 5. 执行打包策略
         id: package
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PLATFORM: ${{ matrix.os == 'windows-latest' && 'win' || matrix.os == 'macos-latest' && 'mac' || 'linux' }}
         run: |
-          node scripts/package-app.js \
+          node forge-scripts/scripts/package-app.js \
             --project-type "${{ inputs.project_type }}" \
             --platform "${PLATFORM}"
 
-      - name: 5. 创建 GitHub Release 并上传构建产物
+      - name: 6. 创建 GitHub Release 并上传构建产物
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_id }}
@@ -80,14 +89,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-      - name: 6. 生成安装说明（GitHub Models）
+      - name: 7. 生成安装说明（GitHub Models）
         if: matrix.os == 'ubuntu-latest'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          node scripts/package-app.js --project-type "${{ inputs.project_type }}" --generate-guide
+          node forge-scripts/scripts/package-app.js --project-type "${{ inputs.project_type }}" --generate-guide
 
-      - name: 7. 回调通知完成
+      - name: 8. 回调通知完成
         if: always()
         env:
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
@@ -108,8 +117,8 @@ jobs:
                 \"versionTag\": \"${VERSION_TAG}\",
                 \"releaseUrl\": \"${RELEASE_URL}\",
                 \"downloadUrl\": \"${DOWNLOAD_URL}\",
-                \"repo_owner\": \"${{ inputs.repo_owner }}\",
-                \"repo_name\": \"${{ inputs.repo_name }}\"
+                \"repoOwner\": \"${{ inputs.repo_owner }}\",
+                \"repoName\": \"${{ inputs.repo_name }}\"
               }
             }"
           echo "回调通知已发送"

@@ -681,6 +681,8 @@ function SettingsTab() {
   const [githubToken, setGithubToken] = useState('');
   const [githubOrg, setGithubOrg] = useState('');
   const [appUrl, setAppUrl] = useState('');
+  const [forgeRepoOwner, setForgeRepoOwner] = useState('');
+  const [forgeRepoName, setForgeRepoName] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState('');
@@ -701,6 +703,8 @@ function SettingsTab() {
         setClientId(s.GITHUB_CLIENT_ID || '');
         setGithubOrg(s.GITHUB_ORG || '');
         setAppUrl(s.APP_URL || '');
+        setForgeRepoOwner(s.FORGE_REPO_OWNER || '');
+        setForgeRepoName(s.FORGE_REPO_NAME || '');
         // 密钥字段留空，通过 placeholder 显示脱敏值
         setClientSecret('');
         setGithubToken('');
@@ -728,6 +732,8 @@ function SettingsTab() {
     if (githubToken.trim()) settings.GITHUB_TOKEN = githubToken.trim();
     if (githubOrg.trim()) settings.GITHUB_ORG = githubOrg.trim();
     if (appUrl.trim()) settings.APP_URL = appUrl.trim();
+    if (forgeRepoOwner.trim()) settings.FORGE_REPO_OWNER = forgeRepoOwner.trim();
+    if (forgeRepoName.trim()) settings.FORGE_REPO_NAME = forgeRepoName.trim();
 
     if (Object.keys(settings).length === 0) {
       setError('没有需要更新的配置项');
@@ -754,6 +760,8 @@ function SettingsTab() {
         setClientId(s.GITHUB_CLIENT_ID || '');
         setGithubOrg(s.GITHUB_ORG || '');
         setAppUrl(s.APP_URL || '');
+        setForgeRepoOwner(s.FORGE_REPO_OWNER || '');
+        setForgeRepoName(s.FORGE_REPO_NAME || '');
         setClientSecret('');
         setGithubToken('');
       }
@@ -876,6 +884,38 @@ function SettingsTab() {
           <p className="mt-1 text-xs text-forge-muted">
             应用访问地址，用于构建 OAuth 回调与 Webhook 地址
           </p>
+        </div>
+
+        {/* Forge 仓库配置 */}
+        <div className="rounded-lg border border-forge-border bg-forge-surface/50 p-4">
+          <h4 className="mb-3 text-sm font-semibold text-forge-ink">
+            Agent Forge 仓库配置
+          </h4>
+          <p className="mb-3 text-xs text-forge-muted">
+            存放 GitHub Actions 工作流文件的仓库（即本仓库），所有 workflow 在此仓库上触发
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-forge-muted">仓库 Owner</label>
+              <input
+                type="text"
+                value={forgeRepoOwner}
+                onChange={(e) => setForgeRepoOwner(e.target.value)}
+                placeholder={maskedSettings.FORGE_REPO_OWNER || '如: wang361999'}
+                className="forge-input w-full font-mono text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-forge-muted">仓库名</label>
+              <input
+                type="text"
+                value={forgeRepoName}
+                onChange={(e) => setForgeRepoName(e.target.value)}
+                placeholder={maskedSettings.FORGE_REPO_NAME || '如: gitd'}
+                className="forge-input w-full font-mono text-sm"
+              />
+            </div>
+          </div>
         </div>
 
         {/* 保存按钮 */}

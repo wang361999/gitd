@@ -3,7 +3,7 @@ import { ProjectStatus, TaskStage, TaskStatus } from "@prisma/client";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createRepo, triggerWorkflow, slugify } from "@/lib/github";
-import { getAppUrl } from "@/lib/settings";
+import { getAppUrl, getForgeRepo } from "@/lib/settings";
 
 /**
  * 构建路由 (POST)
@@ -81,10 +81,11 @@ export async function POST(request: Request) {
 
       const appUrl = await getAppUrl();
       const callbackUrl = `${appUrl}/api/webhook`;
+      const forgeRepo = await getForgeRepo();
 
       const runId = await triggerWorkflow(
-        project.repoOwner,
-        project.repoName,
+        forgeRepo.owner,
+        forgeRepo.name,
         "package.yml",
         "main",
         {
@@ -150,13 +151,14 @@ export async function POST(request: Request) {
       },
     });
 
-    // 4. 触发 generate.yml 工作流
+    // 4. 触发 generate.yml 工作流（在 Agent Forge 仓库上触发）
     const appUrl = await getAppUrl();
     const callbackUrl = `${appUrl}/api/webhook`;
+    const forgeRepo = await getForgeRepo();
 
     const runId = await triggerWorkflow(
-      repo.owner,
-      repo.repo,
+      forgeRepo.owner,
+      forgeRepo.name,
       "generate.yml",
       "main",
       {

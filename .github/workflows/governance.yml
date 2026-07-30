@@ -35,12 +35,21 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0 # 完整历史，用于 git log / blame 溯源
 
-      - name: 2. 设置 Node.js 18
+      - name: 2. Checkout Agent Forge 脚本
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.FORGE_REPO || 'wang361999/gitd' }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: ./forge-scripts
+          sparse-checkout: |
+            scripts
+
+      - name: 3. 设置 Node.js 18
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: 3. 安装依赖
+      - name: 4. 安装依赖
         run: |
           if [ -f package.json ]; then
             npm ci || npm install
@@ -48,25 +57,25 @@ jobs:
             echo "未找到 package.json，跳过依赖安装"
           fi
 
-      - name: 4. 运行溯源扫描
-        run: node scripts/run-provenance.js
+      - name: 5. 运行溯源扫描
+        run: node forge-scripts/scripts/run-provenance.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 5. 运行安全检查
-        run: node scripts/run-security.js
+      - name: 6. 运行安全检查
+        run: node forge-scripts/scripts/run-security.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 6. 运行 Lore 决策提取
-        run: node scripts/run-lore.js
+      - name: 7. 运行 Lore 决策提取
+        run: node forge-scripts/scripts/run-lore.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 7. 聚合生成治理报告
-        run: node scripts/generate-report.js
+      - name: 8. 聚合生成治理报告
+        run: node forge-scripts/scripts/generate-report.js
 
-      - name: 8. 上传治理报告到 GitHub Releases
+      - name: 9. 上传治理报告到 GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: governance-${{ github.run_id }}
@@ -80,7 +89,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-      - name: 9. 回调通知完成
+      - name: 10. 回调通知完成
         if: always()
         env:
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}

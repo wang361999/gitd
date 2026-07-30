@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { ProjectStatus, TaskStage, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { triggerWorkflow } from "@/lib/github";
-import { getSetting, getAppUrl, SETTING_KEYS, ensureTablesExist } from "@/lib/settings";
+import { getSetting, getAppUrl, getForgeRepo, SETTING_KEYS, ensureTablesExist } from "@/lib/settings";
 
 /**
  * Webhook 路由 (POST)
@@ -86,13 +86,13 @@ export async function POST(request: Request) {
         const repoName = result?.repoName || project.repoName;
 
         if (repoOwner && repoName) {
+          const forgeRepo = await getForgeRepo();
           const runId = await triggerWorkflow(
-            repoOwner,
-            repoName,
+            forgeRepo.owner,
+            forgeRepo.name,
             "governance.yml",
             "main",
             {
-              project_id: project.id,
               repo_owner: repoOwner,
               repo_name: repoName,
               task_id: governanceTask.id,
@@ -120,13 +120,13 @@ export async function POST(request: Request) {
         });
 
         if (project.repoOwner && project.repoName) {
+          const forgeRepo = await getForgeRepo();
           const runId = await triggerWorkflow(
-            project.repoOwner,
-            project.repoName,
+            forgeRepo.owner,
+            forgeRepo.name,
             "package.yml",
             "main",
             {
-              project_id: project.id,
               project_type: project.projectType,
               repo_owner: project.repoOwner,
               repo_name: project.repoName,

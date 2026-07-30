@@ -35,6 +35,7 @@ const SKIP_DIRS = new Set([
   ".forge",
   ".lore",
   "release-artifacts",
+  "forge-scripts",
 ]);
 
 /** 需要跳过的文件扩展名（二进制 / 产物） */
