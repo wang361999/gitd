@@ -1,0 +1,151 @@
+// Agent Forge Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ 枚举 ============
+
+enum ProjectStatus {
+  draft
+  building
+  governing
+  packaging
+  done
+  failed
+}
+
+enum TaskStage {
+  generate
+  governance
+  package
+}
+
+enum TaskStatus {
+  pending
+  running
+  success
+  failed
+}
+
+// ============ 数据表 ============
+
+/// 系统配置表 — 存储所有环境变量，部署后自动落库
+model Setting {
+  key       String   @id
+  value     String   @db.Text
+  category  String   @default("general") // github | app | security
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  githubId    Int     @unique
+  username    String
+  email       String?
+  avatarUrl   String?
+  accessToken String
+  createdAt   DateTime @default(now())
+
+  projects    Project[]
+
+  @@map("users")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String   @db.Text
+  projectType String   @default("web") // web | desktop | mobile
+  repoUrl     String?
+  repoOwner   String?
+  repoName    String?
+  previewUrl  String?
+  downloadUrl String?
+  status      ProjectStatus @default(draft)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  governanceReports GovernanceReport[]
+  loreRecords LoreRecord[]
+  versions    Version[]
+
+  @@map("projects")
+}
+
+model Task {
+  id            String   @id @default(cuid())
+  projectId     String
+  stage         TaskStage
+  status        TaskStatus @default(pending)
+  log           String?  @db.Text
+  result        Json?
+  actionsRunId  Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  governanceReports GovernanceReport[]
+
+  @@map("tasks")
+}
+
+model GovernanceReport {
+  id          String   @id @default(cuid())
+  taskId      String
+  projectId   String
+  filePath    String
+  source      String   // human | ai:gpt-4o | ai:llama-4 etc
+  modelName   String?
+  lineCount   Int      @default(0)
+  riskScore   Float    @default(0)
+  issues      Json     // { type, severity, line, description, suggestion }[]
+  reviewed    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("governance_reports")
+}
+
+model LoreRecord {
+  id          String   @id @default(cuid())
+  projectId   String
+  commitSha   String
+  context     String   @db.Text
+  decision    String   @db.Text
+  rejected    String?  @db.Text
+  constraints String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("lore_records")
+}
+
+model Version {
+  id          String   @id @default(cuid())
+  projectId   String
+  versionTag  String
+  releaseUrl  String?
+  downloadUrl String?
+  releaseNotes String? @db.Text
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("versions")
+}

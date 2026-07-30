@@ -1,0 +1,36 @@
+{
+  "name": "agent-forge",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.1",
+    "next": "14.2.26",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@octokit/rest": "^21.0.2",
+    "@octokit/auth-app": "^7.1.1",
+    "iron-session": "^8.0.4",
+    "marked": "^14.1.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.5",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.45",
+    "prisma": "^5.19.1",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.5.4"
+  }
+}

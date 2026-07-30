@@ -1,0 +1,98 @@
+name: 代码生成
+
+# 代码生成工作流：根据需求描述调用 GitHub Models 生成完整项目代码并推送到目标仓库
+on:
+  workflow_dispatch:
+    inputs:
+      requirement:
+        description: 需求描述
+        required: true
+        type: string
+      project_type:
+        description: 项目类型 (web/desktop/mobile)
+        required: true
+        type: string
+        default: web
+      project_name:
+        description: 项目名称
+        required: true
+        type: string
+      repo_owner:
+        description: 目标仓库 owner
+        required: true
+        type: string
+      repo_name:
+        description: 目标仓库名
+        required: true
+        type: string
+      task_id:
+        description: 任务ID（用于回调）
+        required: true
+        type: string
+      callback_url:
+        description: 回调API地址
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 2. 设置 Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: 3. 安装依赖
+        run: npm ci
+
+      - name: 4. 生成项目代码
+        id: generate
+        run: |
+          node scripts/generate-project.js \
+            --requirement "${{ inputs.requirement }}" \
+            --project-type "${{ inputs.project_type }}" \
+            --project-name "${{ inputs.project_name }}" \
+            --output-dir ./generated
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 5. 推送生成的代码到目标仓库
+        env:
+          TARGET_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          set -e
+          cd ./generated
+          # 目标仓库远程地址（使用 PAT 鉴权）
+          REMOTE_URL="https://x-access-token:${TARGET_TOKEN}@github.com/${{ inputs.repo_owner }}/${{ inputs.repo_name }}.git"
+          git remote add target "${REMOTE_URL}"
+          echo "正在推送到 ${{ inputs.repo_owner }}/${{ inputs.repo_name }} ..."
+          git push target HEAD:main --force
+          echo "推送完成"
+
+      - name: 6. 回调通知完成
+        if: always()
+        env:
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          STATUS="${{ job.status }}"
+          echo "任务 ${{ inputs.task_id }} 状态: ${STATUS}"
+          curl -s -X POST "${{ inputs.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: ${WEBHOOK_SECRET}" \
+            -d "{
+              \"task_id\": \"${{ inputs.task_id }}\",
+              \"status\": \"${STATUS}\",
+              \"project_name\": \"${{ inputs.project_name }}\",
+              \"repo_owner\": \"${{ inputs.repo_owner }}\",
+              \"repo_name\": \"${{ inputs.repo_name }}\",
+              \"project_type\": \"${{ inputs.project_type }}\"
+            }"
+          echo "回调通知已发送"

@@ -1,0 +1,99 @@
+name: 治理审核
+
+# 治理审核工作流：对目标仓库执行溯源扫描、安全检查、Lore 决策提取，并聚合生成治理报告
+on:
+  workflow_dispatch:
+    inputs:
+      repo_owner:
+        description: 仓库 owner
+        required: true
+        type: string
+      repo_name:
+        description: 仓库名
+        required: true
+        type: string
+      task_id:
+        description: 任务ID
+        required: true
+        type: string
+      callback_url:
+        description: 回调API地址
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout 目标仓库代码
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo_owner }}/${{ inputs.repo_name }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0 # 完整历史，用于 git log / blame 溯源
+
+      - name: 2. 设置 Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: 3. 安装依赖
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+          else
+            echo "未找到 package.json，跳过依赖安装"
+          fi
+
+      - name: 4. 运行溯源扫描
+        run: node scripts/run-provenance.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 5. 运行安全检查
+        run: node scripts/run-security.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 6. 运行 Lore 决策提取
+        run: node scripts/run-lore.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 7. 聚合生成治理报告
+        run: node scripts/generate-report.js
+
+      - name: 8. 上传治理报告到 GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: governance-${{ github.run_id }}
+          name: 治理报告 ${{ inputs.repo_name }}
+          body: "自动生成的治理报告，包含来源溯源、安全检查与决策时间线。"
+          files: |
+            .forge/governance-report.html
+            .forge/provenance.json
+            .forge/security-report.json
+            .lore/decisions.jsonl
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: 9. 回调通知完成
+        if: always()
+        env:
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          STATUS="${{ job.status }}"
+          echo "治理任务 ${{ inputs.task_id }} 状态: ${STATUS}"
+          curl -s -X POST "${{ inputs.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: ${WEBHOOK_SECRET}" \
+            -d "{
+              \"task_id\": \"${{ inputs.task_id }}\",
+              \"status\": \"${STATUS}\",
+              \"repo_owner\": \"${{ inputs.repo_owner }}\",
+              \"repo_name\": \"${{ inputs.repo_name }}\"
+            }"
+          echo "回调通知已发送"

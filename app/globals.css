@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   Agent Forge - 全局样式
+   GitHub 深色主题
+   ============================================ */
+
+:root {
+  --forge-bg: #0d1117;
+  --forge-surface: #161b22;
+  --forge-border: #30363d;
+  --forge-ink: #e6edf3;
+  --forge-muted: #8b949e;
+  --forge-accent: #58a6ff;
+  --forge-green: #3fb950;
+  --forge-yellow: #d29922;
+  --forge-red: #f85149;
+  --forge-purple: #bc8cff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background-color: var(--forge-bg);
+  color: var(--forge-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC",
+    Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ============================================
+   自定义滚动条
+   ============================================ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--forge-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--forge-border);
+  border-radius: 6px;
+  border: 2px solid var(--forge-bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+/* Firefox 滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--forge-border) var(--forge-bg);
+}
+
+/* ============================================
+   文本选区颜色
+   ============================================ */
+::selection {
+  background-color: rgba(88, 166, 255, 0.3);
+  color: var(--forge-ink);
+}
+
+/* ============================================
+   通用工具类
+   ============================================ */
+@layer components {
+  .forge-card {
+    @apply bg-forge-surface border border-forge-border rounded-lg;
+  }
+
+  .forge-btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .forge-btn-primary {
+    @apply forge-btn bg-forge-green text-white hover:brightness-110;
+  }
+
+  .forge-btn-secondary {
+    @apply forge-btn bg-forge-surface border border-forge-border text-forge-ink hover:border-forge-muted;
+  }
+
+  .forge-btn-accent {
+    @apply forge-btn bg-forge-accent text-white hover:brightness-110;
+  }
+
+  .forge-input {
+    @apply bg-forge-bg border border-forge-border rounded-md px-3 py-2 text-forge-ink placeholder-forge-muted focus:outline-none focus:border-forge-accent focus:ring-1 focus:ring-forge-accent transition-colors;
+  }
+}
+
+/* ============================================
+   动画
+   ============================================ */
+@keyframes forge-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.forge-animate-pulse {
+  animation: forge-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes forge-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.forge-animate-spin {
+  animation: forge-spin 1s linear infinite;
+}
+
+@keyframes forge-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.forge-animate-fade-in {
+  animation: forge-fade-in 0.3s ease-out;
+}

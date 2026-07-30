@@ -1,0 +1,107 @@
+name: 打包分发
+
+# 打包分发工作流：根据项目类型执行不同的打包策略，创建 GitHub Release 并生成安装说明
+on:
+  workflow_dispatch:
+    inputs:
+      project_type:
+        description: 项目类型 (web/desktop/mobile)
+        required: true
+        type: string
+        default: web
+      repo_owner:
+        description: 仓库 owner
+        required: true
+        type: string
+      repo_name:
+        description: 仓库名
+        required: true
+        type: string
+      task_id:
+        description: 任务ID
+        required: true
+        type: string
+      callback_url:
+        description: 回调API地址
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    # desktop 项目在 windows + macos 上分别打包；web/mobile 仅在 ubuntu 上运行
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.project_type == 'desktop' && '["windows-latest","macos-latest"]' || '["ubuntu-latest"]') }}
+    steps:
+      - name: 1. Checkout 目标仓库代码
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo_owner }}/${{ inputs.repo_name }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: 2. 设置 Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: 3. 安装依赖并构建项目
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+            npm run build || echo "build 脚本不存在或失败，跳过"
+          else
+            echo "未找到 package.json，跳过构建"
+          fi
+
+      - name: 4. 执行打包策略
+        id: package
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLATFORM: ${{ matrix.os == 'windows-latest' && 'win' || matrix.os == 'macos-latest' && 'mac' || 'linux' }}
+        run: |
+          node scripts/package-app.js \
+            --project-type "${{ inputs.project_type }}" \
+            --platform "${PLATFORM}"
+
+      - name: 5. 创建 GitHub Release 并上传构建产物
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_id }}
+          name: 发布 ${{ inputs.repo_name }}
+          body_path: ./release-notes.md
+          files: |
+            ./dist/*
+            ./release-artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: 6. 生成安装说明（GitHub Models）
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/package-app.js --project-type "${{ inputs.project_type }}" --generate-guide
+
+      - name: 7. 回调通知完成
+        if: always()
+        env:
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          STATUS="${{ job.status }}"
+          echo "打包任务 ${{ inputs.task_id }} 状态: ${STATUS}"
+          curl -s -X POST "${{ inputs.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: ${WEBHOOK_SECRET}" \
+            -d "{
+              \"task_id\": \"${{ inputs.task_id }}\",
+              \"status\": \"${STATUS}\",
+              \"project_type\": \"${{ inputs.project_type }}\",
+              \"repo_owner\": \"${{ inputs.repo_owner }}\",
+              \"repo_name\": \"${{ inputs.repo_name }}\"
+            }"
+          echo "回调通知已发送"

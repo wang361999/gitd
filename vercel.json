@@ -1,0 +1,15 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "functions": {
+    "app/api/auth/route.ts": { "maxDuration": 30 },
+    "app/api/build/route.ts": { "maxDuration": 30 },
+    "app/api/status/route.ts": { "maxDuration": 10 },
+    "app/api/webhook/route.ts": { "maxDuration": 30 },
+    "app/api/projects/route.ts": { "maxDuration": 10 },
+    "app/api/governance/route.ts": { "maxDuration": 10 },
+    "app/api/setup/route.ts": { "maxDuration": 30 }
+  }
+}
