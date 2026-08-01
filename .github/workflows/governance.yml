@@ -20,6 +20,10 @@ on:
         description: 回调API地址
         required: true
         type: string
+      user_token:
+        description: 用户的 GitHub OAuth token（用于操作用户仓库）
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -28,11 +32,11 @@ jobs:
   governance:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout 目标仓库代码
+      - name: 1. Checkout 目标仓库代码（使用用户 token）
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.repo_owner }}/${{ inputs.repo_name }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ inputs.user_token }}
           fetch-depth: 0 # 完整历史，用于 git log / blame 溯源
 
       - name: 2. Checkout Agent Forge 脚本
@@ -78,9 +82,9 @@ jobs:
       - name: 9. 聚合治理数据（供回调写入数据库）
         run: node forge-scripts/scripts/collect-governance.js > governance-data.json
 
-      - name: 10. 上传治理报告到目标仓库 Releases
+      - name: 10. 上传治理报告到目标仓库 Releases（使用用户 token）
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ inputs.user_token }}
         run: |
           # 收集存在的治理报告文件
           FILES=""

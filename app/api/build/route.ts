@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { ProjectStatus, TaskStage, TaskStatus } from "@prisma/client";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createRepo, triggerWorkflow, slugify } from "@/lib/github";
+import {
+  createRepoWithUserToken,
+  verifyRepoAccess,
+  triggerWorkflow,
+  slugify,
+} from "@/lib/github";
 import { getAppUrl, getForgeRepo } from "@/lib/settings";
 
 /**
@@ -31,7 +36,15 @@ export async function POST(request: Request) {
     const session = await requireAuth();
 
     const body = await request.json();
-    const { description, projectType, projectName, action } = body ?? {};
+    const {
+      description,
+      projectType,
+      projectName,
+      action,
+      repoMode,
+      repoOwner,
+      repoName,
+    } = body ?? {};
 
     // ================================================================
     // 模式 B：重新打包
@@ -75,6 +88,18 @@ export async function POST(request: Request) {
         data: { status: ProjectStatus.packaging },
       });
 
+      // 获取用户 token（用于 workflow 操作用户仓库）
+      const repkgUser = await prisma.user.findUnique({
+        where: { id: session.userId! },
+        select: { accessToken: true },
+      });
+      if (!repkgUser?.accessToken) {
+        return NextResponse.json(
+          { error: "未找到用户的 GitHub 访问令牌，请重新登录" },
+          { status: 401 }
+        );
+      }
+
       // 创建打包 Task
       const task = await prisma.task.create({
         data: {
@@ -100,6 +125,7 @@ export async function POST(request: Request) {
           repo_name: project.repoName,
           task_id: task.id,
           callback_url: callbackUrl,
+          user_token: repkgUser.accessToken,
         }
       );
 
@@ -168,10 +194,27 @@ export async function POST(request: Request) {
         let repoOwner = project.repoOwner;
         let repoName = project.repoName;
 
-        // 如果没有仓库信息，尝试创建新仓库
+        // 获取用户 token（用于创建仓库和触发 workflow）
+        const retryUser = await prisma.user.findUnique({
+          where: { id: session.userId! },
+          select: { accessToken: true },
+        });
+        if (!retryUser?.accessToken) {
+          return NextResponse.json(
+            { error: "未找到用户的 GitHub 访问令牌，请重新登录" },
+            { status: 401 }
+          );
+        }
+
+        // 如果没有仓库信息，尝试使用用户 token 创建新仓库
         if (!repoOwner || !repoName) {
           const repoSlug = slugify(project.name);
-          const repo = await createRepo(repoSlug, project.description, true);
+          const repo = await createRepoWithUserToken(
+            retryUser.accessToken,
+            repoSlug,
+            project.description,
+            true
+          );
           repoOwner = repo.owner;
           repoName = repo.repo;
 
@@ -212,6 +255,7 @@ export async function POST(request: Request) {
             repo_name: repoName,
             task_id: task.id,
             callback_url: callbackUrl,
+            user_token: retryUser.accessToken,
           }
         );
 
@@ -229,6 +273,18 @@ export async function POST(request: Request) {
           return NextResponse.json(
             { error: "项目缺少仓库信息，无法重试治理" },
             { status: 400 }
+          );
+        }
+
+        // 获取用户 token
+        const govRetryUser = await prisma.user.findUnique({
+          where: { id: session.userId! },
+          select: { accessToken: true },
+        });
+        if (!govRetryUser?.accessToken) {
+          return NextResponse.json(
+            { error: "未找到用户的 GitHub 访问令牌，请重新登录" },
+            { status: 401 }
           );
         }
 
@@ -255,6 +311,7 @@ export async function POST(request: Request) {
             repo_name: project.repoName,
             task_id: task.id,
             callback_url: callbackUrl,
+            user_token: govRetryUser.accessToken,
           }
         );
 
@@ -272,6 +329,18 @@ export async function POST(request: Request) {
           return NextResponse.json(
             { error: "项目缺少仓库信息，无法重试打包" },
             { status: 400 }
+          );
+        }
+
+        // 获取用户 token
+        const pkgRetryUser = await prisma.user.findUnique({
+          where: { id: session.userId! },
+          select: { accessToken: true },
+        });
+        if (!pkgRetryUser?.accessToken) {
+          return NextResponse.json(
+            { error: "未找到用户的 GitHub 访问令牌，请重新登录" },
+            { status: 401 }
           );
         }
 
@@ -300,6 +369,7 @@ export async function POST(request: Request) {
             repo_name: project.repoName,
             task_id: task.id,
             callback_url: callbackUrl,
+            user_token: pkgRetryUser.accessToken,
           }
         );
 
@@ -339,21 +409,71 @@ export async function POST(request: Request) {
     });
     projectId = project.id;
 
-    // 2. 调用 createRepo() 创建 GitHub 仓库
-    const repoSlug = slugify(projectName);
-    const repo = await createRepo(repoSlug, description, true);
+    // 2. 获取用户 OAuth token，用于校验或创建用户名下的仓库
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId! },
+      select: { accessToken: true },
+    });
+    if (!user?.accessToken) {
+      throw new Error("未找到用户的 GitHub 访问令牌，请重新登录");
+    }
+    const userToken = user.accessToken;
+
+    // 3. 根据仓库模式处理目标仓库
+    let repoOwnerFinal: string;
+    let repoNameFinal: string;
+    let repoHtmlUrl: string;
+
+    if (repoMode === "existing") {
+      // 使用已有仓库：校验用户对指定仓库具备 push 权限
+      if (!repoOwner || !repoName) {
+        return NextResponse.json(
+          { error: "使用已有仓库时需要提供 repoOwner 和 repoName" },
+          { status: 400 }
+        );
+      }
+      const hasAccess = await verifyRepoAccess(
+        userToken,
+        repoOwner,
+        repoName
+      );
+      if (!hasAccess) {
+        return NextResponse.json(
+          {
+            error:
+              "无权访问该仓库或没有 push 权限，请确认仓库地址与登录账号",
+          },
+          { status: 403 }
+        );
+      }
+      repoOwnerFinal = repoOwner;
+      repoNameFinal = repoName;
+      repoHtmlUrl = `https://github.com/${repoOwner}/${repoName}`;
+    } else {
+      // 默认 / 创建新仓库：使用用户 token 在用户账号下创建
+      const repoSlug = slugify(projectName);
+      const createdRepo = await createRepoWithUserToken(
+        userToken,
+        repoSlug,
+        description,
+        true
+      );
+      repoOwnerFinal = createdRepo.owner;
+      repoNameFinal = createdRepo.repo;
+      repoHtmlUrl = createdRepo.html_url;
+    }
 
     // 回写仓库信息到 Project
     await prisma.project.update({
       where: { id: projectId },
       data: {
-        repoUrl: repo.html_url,
-        repoOwner: repo.owner,
-        repoName: repo.repo,
+        repoUrl: repoHtmlUrl,
+        repoOwner: repoOwnerFinal,
+        repoName: repoNameFinal,
       },
     });
 
-    // 3. 创建 Task 记录 (stage: generate, status: pending)
+    // 4. 创建 Task 记录 (stage: generate, status: pending)
     const task = await prisma.task.create({
       data: {
         projectId,
@@ -362,7 +482,7 @@ export async function POST(request: Request) {
       },
     });
 
-    // 4. 触发 generate.yml 工作流（在 Agent Forge 仓库上触发）
+    // 5. 触发 generate.yml 工作流（在 Agent Forge 仓库上触发）
     const appUrl = await getAppUrl();
     const callbackUrl = `${appUrl}/api/webhook`;
     const forgeRepo = await getForgeRepo();
@@ -376,10 +496,11 @@ export async function POST(request: Request) {
         requirement: description,
         project_type: projectType || "web",
         project_name: projectName,
-        repo_owner: repo.owner,
-        repo_name: repo.repo,
+        repo_owner: repoOwnerFinal,
+        repo_name: repoNameFinal,
         task_id: task.id,
         callback_url: callbackUrl,
+        user_token: userToken,
       }
     );
 

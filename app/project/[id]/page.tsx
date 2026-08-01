@@ -64,6 +64,8 @@ const TYPE_LABELS: Record<string, string> = {
   web: 'Web 应用',
   desktop: '桌面应用',
   mobile: '移动应用',
+  'governance-only': '独立治理',
+  upload: '上传治理',
 };
 
 type TabKey = 'overview' | 'download' | 'report' | 'provenance' | 'security' | 'lore';
@@ -228,10 +230,14 @@ export default function ProjectDetailPage() {
   );
   // 仅当项目状态为 done 时才显示治理相关 Tab
   const showGovernance = project.status === 'done';
+  // 治理专用项目不显示下载 Tab
+  const isGovernanceOnly =
+    project.projectType === 'governance-only' ||
+    project.projectType === 'upload';
 
   const tabs: { key: TabKey; label: string; show: boolean }[] = [
     { key: 'overview', label: '概览', show: true },
-    { key: 'download', label: '下载安装', show: showGovernance },
+    { key: 'download', label: '下载安装', show: showGovernance && !isGovernanceOnly },
     { key: 'report', label: '治理报告', show: showGovernance },
     { key: 'provenance', label: '代码溯源', show: showGovernance },
     { key: 'security', label: '安全审计', show: showGovernance },
@@ -354,15 +360,19 @@ export default function ProjectDetailPage() {
               <path d="M8 3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 3z" />
             </svg>
             <span className="text-sm text-forge-ink">
-              项目正在构建中...
+              {project.projectType === 'governance-only' || project.projectType === 'upload'
+                ? '治理审查进行中，请稍候...'
+                : '项目正在构建中...'}
             </span>
           </div>
-          <Link
-            href={`/project/${project.id}/build`}
-            className="forge-btn-accent text-sm"
-          >
-            查看进度
-          </Link>
+          {project.projectType !== 'governance-only' && project.projectType !== 'upload' && (
+            <Link
+              href={`/project/${project.id}/build`}
+              className="forge-btn-accent text-sm"
+            >
+              查看进度
+            </Link>
+          )}
         </div>
       )}
 

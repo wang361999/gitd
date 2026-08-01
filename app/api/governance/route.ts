@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { ProjectStatus, TaskStage, TaskStatus } from "@prisma/client";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { verifyRepoAccess, triggerWorkflow } from "@/lib/github";
+import { getAppUrl, getForgeRepo } from "@/lib/settings";
 
 /**
  * 治理路由 (GET)
@@ -249,6 +252,123 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     console.error("[governance] error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * 治理路由 (POST)
+ * 对已有仓库发起独立治理审查（跳过构建阶段）
+ * body: { repoOwner, repoName }
+ * 返回 { projectId, taskId }
+ */
+export async function POST(request: Request) {
+  // 在 try 外声明，便于出错时回滚项目状态
+  let projectId: string | null = null;
+
+  try {
+    const session = await requireAuth();
+    const userId = session.userId!;
+
+    const body = await request.json();
+    const { repoOwner, repoName } = body ?? {};
+
+    if (!repoOwner || !repoName) {
+      return NextResponse.json(
+        { error: "Missing required fields: repoOwner, repoName" },
+        { status: 400 }
+      );
+    }
+
+    // 获取用户 GitHub OAuth token
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { accessToken: true },
+    });
+    if (!user?.accessToken) {
+      return NextResponse.json(
+        { error: "未找到用户的 GitHub 访问令牌，请重新登录" },
+        { status: 401 }
+      );
+    }
+    const userToken = user.accessToken;
+
+    // 校验用户对该仓库具备 push 权限
+    const hasAccess = await verifyRepoAccess(userToken, repoOwner, repoName);
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: "无权访问该仓库或没有 push 权限" },
+        { status: 403 }
+      );
+    }
+
+    // 创建 Project 记录（独立治理，跳过构建阶段）
+    const project = await prisma.project.create({
+      data: {
+        userId,
+        name: repoName,
+        description: `对仓库 ${repoOwner}/${repoName} 的独立治理审查`,
+        projectType: "governance-only",
+        status: ProjectStatus.governing,
+        repoOwner,
+        repoName,
+        repoUrl: `https://github.com/${repoOwner}/${repoName}`,
+      },
+    });
+    projectId = project.id;
+
+    // 创建治理 Task
+    const task = await prisma.task.create({
+      data: {
+        projectId,
+        stage: TaskStage.governance,
+        status: TaskStatus.pending,
+      },
+    });
+
+    // 触发 governance.yml 工作流（在 Agent Forge 仓库上触发）
+    const appUrl = await getAppUrl();
+    const callbackUrl = `${appUrl}/api/webhook`;
+    const forgeRepo = await getForgeRepo();
+
+    const runId = await triggerWorkflow(
+      forgeRepo.owner,
+      forgeRepo.name,
+      "governance.yml",
+      "main",
+      {
+        repo_owner: repoOwner,
+        repo_name: repoName,
+        task_id: task.id,
+        callback_url: callbackUrl,
+        user_token: userToken,
+      }
+    );
+
+    await prisma.task.update({
+      where: { id: task.id },
+      data: { actionsRunId: runId, status: TaskStatus.running },
+    });
+
+    return NextResponse.json({ projectId, taskId: task.id });
+  } catch (error) {
+    // 出错时将已创建的项目标记为 failed，避免悬挂的 governing 状态
+    if (projectId) {
+      await prisma.project
+        .update({
+          where: { id: projectId },
+          data: { status: ProjectStatus.failed },
+        })
+        .catch(() => {});
+    }
+
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    console.error("[governance] POST error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }

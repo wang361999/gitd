@@ -155,6 +155,23 @@ export async function ensureTablesExist(): Promise<void> {
       );
     `);
 
+    // governance_schedules 表
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "governance_schedules" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "repoOwner" TEXT NOT NULL,
+        "repoName" TEXT NOT NULL,
+        "frequency" TEXT NOT NULL DEFAULT 'weekly',
+        "enabled" BOOLEAN NOT NULL DEFAULT true,
+        "lastRunAt" TIMESTAMP(3),
+        "nextRunAt" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "governance_schedules_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
     // 外键约束（单独添加，避免 IF NOT EXISTS 不支持约束名检查）
     await prisma.$executeRawUnsafe(`
       DO $$
@@ -182,6 +199,10 @@ export async function ensureTablesExist(): Promise<void> {
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'versions_projectId_fkey') THEN
           ALTER TABLE "versions" ADD CONSTRAINT "versions_projectId_fkey"
           FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'governance_schedules_userId_fkey') THEN
+          ALTER TABLE "governance_schedules" ADD CONSTRAINT "governance_schedules_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;
         END IF;
       END $$;
     `);

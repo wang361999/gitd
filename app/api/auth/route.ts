@@ -81,14 +81,26 @@ export async function GET(request: Request) {
       session.isLoggedIn = true;
       await session.save();
 
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      // 设置登录标记 cookie（供 middleware 在 Edge Runtime 检查）
+      const response = NextResponse.redirect(new URL("/dashboard", request.url));
+      response.cookies.set("forge-auth", "1", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: "/",
+      });
+      return response;
     }
 
     // -------------------- 登出：清除 session --------------------
     if (action === "logout") {
       const session = await getSession();
       session.destroy();
-      return NextResponse.redirect(new URL("/", request.url));
+      const response = NextResponse.redirect(new URL("/", request.url));
+      // 清除登录标记 cookie
+      response.cookies.delete("forge-auth");
+      return response;
     }
 
     // -------------------- 状态：返回登录信息 --------------------

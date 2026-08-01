@@ -2,15 +2,15 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Middleware: 未配置时自动跳转到 /setup
+ * Middleware: 系统配置检查 + 登录验证
  *
- * 工作原理：
- * - Setup 完成后，/api/setup POST 会设置 cookie `forge-setup=1`
- * - Middleware 检查此 cookie，不存在则跳转到 /setup
- * - API 路由和 /setup 页面本身不受此规则限制
+ * 两层保护：
+ * 1. Setup 检查：未配置时跳转到 /setup（cookie: forge-setup）
+ * 2. 登录检查：/dashboard、/project、/new 需要登录（cookie: forge-auth）
  *
- * 注意：此方案基于 cookie 标记，不依赖数据库查询（Edge Runtime 不支持 Prisma）
- * 如果用户清除 cookie，可手动访问 /setup 重新配置
+ * 注意：Edge Runtime 不支持 Prisma，因此通过 cookie 标记判断状态
+ * 登录时由 /api/auth callback 设置 forge-auth=1
+ * 登出时由 /api/auth logout 清除 forge-auth
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -26,11 +26,25 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 检查 setup 完成标记
+  // -------------------- 第一层：Setup 检查 --------------------
   const setupComplete = request.cookies.get("forge-setup");
   if (!setupComplete) {
     const setupUrl = new URL("/setup", request.url);
     return NextResponse.redirect(setupUrl);
+  }
+
+  // -------------------- 第二层：登录检查 --------------------
+  // 受保护的路由：需要登录才能访问
+  const protectedPaths = ["/dashboard", "/project", "/new", "/governance", "/upload", "/schedules"];
+  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
+
+  if (isProtected) {
+    const authCookie = request.cookies.get("forge-auth");
+    if (!authCookie) {
+      // 未登录，跳转到首页
+      const homeUrl = new URL("/?login=required", request.url);
+      return NextResponse.redirect(homeUrl);
+    }
   }
 
   return NextResponse.next();

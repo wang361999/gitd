@@ -25,6 +25,86 @@ interface Pagination {
   totalPages: number;
 }
 
+/* ============================================================
+   快捷操作组件
+   ============================================================ */
+interface QuickActionProps {
+  href: string;
+  icon: 'plus' | 'shield' | 'upload' | 'clock';
+  title: string;
+  desc: string;
+}
+
+function QuickActionIcon({ icon }: { icon: QuickActionProps['icon'] }) {
+  switch (icon) {
+    case 'plus':
+      return (
+        <svg
+          className="h-5 w-5"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 110 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z" />
+        </svg>
+      );
+    case 'shield':
+      return (
+        <svg
+          className="h-5 w-5"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M8 0a.75.75 0 01.336.08l6 3a.75.75 0 01.414.67v3.5c0 3.59-2.094 6.78-5.336 8.25a.75.75 0 01-.664 0C5.494 13.94 3.4 10.75 3.4 7.25v-3.5a.75.75 0 01.414-.67l6-3A.75.75 0 018 0z" />
+        </svg>
+      );
+    case 'upload':
+      return (
+        <svg
+          className="h-5 w-5"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M2.75 14A1.75 1.75 0 011 12.25v-2.5a.75.75 0 011.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25v-2.5a.75.75 0 011.5 0v2.5A1.75 1.75 0 0113.25 14H2.75zM7.25 7.689V2a.75.75 0 011.5 0v5.689l1.97-1.969a.75.75 0 111.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L4.22 6.78a.75.75 0 011.06-1.06l1.97 1.969z" />
+        </svg>
+      );
+    case 'clock':
+      return (
+        <svg
+          className="h-5 w-5"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0zM8 3a.75.75 0 01.75.75v3.546l3.04 1.755a.75.75 0 01-.75 1.299l-3.415-1.972A.75.75 0 017.25 8V3.75A.75.75 0 018 3z" />
+        </svg>
+      );
+  }
+}
+
+function QuickAction({ href, icon, title, desc }: QuickActionProps) {
+  return (
+    <Link
+      href={href}
+      className="forge-card group block p-5 transition-all hover:border-forge-accent hover:bg-forge-surface/80"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-forge-accent/10 text-forge-accent transition-colors group-hover:bg-forge-accent/20">
+          <QuickActionIcon icon={icon} />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-forge-ink group-hover:text-forge-accent">
+            {title}
+          </h3>
+          <p className="mt-0.5 text-xs text-forge-muted">{desc}</p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -256,7 +336,7 @@ export default function DashboardPage() {
             </svg>
             刷新
           </button>
-          <Link href="/" className="forge-btn-primary text-sm">
+          <Link href="/new" className="forge-btn-primary text-sm">
             <svg
               className="h-4 w-4"
               viewBox="0 0 16 16"
@@ -292,6 +372,14 @@ export default function DashboardPage() {
           </button>
         </div>
       )}
+
+      {/* 快捷操作 */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <QuickAction href="/new" icon="plus" title="新建项目" desc="从需求生成代码并治理" />
+        <QuickAction href="/governance" icon="shield" title="治理仓库" desc="对已有仓库执行治理审查" />
+        <QuickAction href="/upload" icon="upload" title="上传治理" desc="上传代码文件快速分析" />
+        <QuickAction href="/schedules" icon="clock" title="定时治理" desc="设置自动治理计划" />
+      </div>
 
       {/* 统计卡片 */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

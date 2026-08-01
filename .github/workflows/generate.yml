@@ -33,6 +33,10 @@ on:
         description: 回调API地址
         required: true
         type: string
+      user_token:
+        description: 用户的 GitHub OAuth token（用于推送到用户仓库）
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -64,13 +68,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 5. 推送生成的代码到目标仓库
+      - name: 5. 推送生成的代码到目标仓库（使用用户 token）
         env:
-          TARGET_TOKEN: ${{ secrets.PAT_TOKEN }}
+          TARGET_TOKEN: ${{ inputs.user_token }}
         run: |
           set -e
           cd ./generated
-          # 目标仓库远程地址（使用 PAT 鉴权）
+          # 目标仓库远程地址（使用用户 OAuth token 鉴权）
           REMOTE_URL="https://x-access-token:${TARGET_TOKEN}@github.com/${{ inputs.repo_owner }}/${{ inputs.repo_name }}.git"
           git remote add target "${REMOTE_URL}"
           echo "正在推送到 ${{ inputs.repo_owner }}/${{ inputs.repo_name }} ..."

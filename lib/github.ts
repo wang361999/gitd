@@ -52,6 +52,63 @@ export async function createRepo(
   };
 }
 
+/** 使用用户 OAuth token 创建 GitHub 仓库（仓库归属用户本人账号） */
+export async function createRepoWithUserToken(
+  userToken: string,
+  name: string,
+  description: string,
+  isPrivate: boolean = true
+): Promise<{ owner: string; repo: string; html_url: string }> {
+  const res = await fetch(`${GITHUB_API}/user/repos`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name,
+      description,
+      private: isPrivate,
+      auto_init: true,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(`Failed to create repo with user token: ${err.message}`);
+  }
+
+  const data = await res.json();
+  return {
+    owner: data.owner.login,
+    repo: data.name,
+    html_url: data.html_url,
+  };
+}
+
+/** 校验用户对指定仓库是否具备 push 权限 */
+export async function verifyRepoAccess(
+  userToken: string,
+  owner: string,
+  repo: string
+): Promise<boolean> {
+  const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+
+  if (!res.ok) return false;
+
+  const data = await res.json();
+  // permissions 可能为 null（例如公开仓库且无 token），需要安全访问
+  return Boolean(data?.permissions?.push);
+}
+
 /** 触发 GitHub Actions workflow */
 export async function triggerWorkflow(
   owner: string,
@@ -225,4 +282,158 @@ export function slugify(text: string): string {
     .trim()
     .replace(/\s+/g, "-")
     .substring(0, 40);
+}
+
+/**
+ * 使用用户 token 批量推送多个文件到仓库（Git Database API）
+ * 在单个 commit 中完成所有文件的推送
+ */
+export async function pushMultipleFiles(
+  token: string,
+  owner: string,
+  repo: string,
+  files: { path: string; content: string }[],
+  commitMessage: string,
+  branch: string = "main"
+): Promise<{ commitSha: string }> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "Content-Type": "application/json",
+  };
+
+  // 1. 获取分支当前 commit 的 SHA（如果分支不存在，从默认分支创建）
+  let baseTreeSha: string | null = null;
+  let parentCommitSha: string | null = null;
+
+  try {
+    const refRes = await fetch(
+      `${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+      { headers }
+    );
+    if (refRes.ok) {
+      const refData = await refRes.json();
+      parentCommitSha = refData.object.sha;
+      // 获取 commit 的 tree SHA
+      const commitRes = await fetch(
+        `${GITHUB_API}/repos/${owner}/${repo}/git/commits/${parentCommitSha}`,
+        { headers }
+      );
+      if (commitRes.ok) {
+        const commitData = await commitRes.json();
+        baseTreeSha = commitData.tree.sha;
+      }
+    }
+  } catch {
+    // 分支可能不存在，稍后创建
+  }
+
+  // 2. 为每个文件创建 blob
+  const treeItems: {
+    path: string;
+    mode: "100644";
+    type: "blob";
+    sha: string;
+  }[] = [];
+
+  for (const file of files) {
+    const blobRes = await fetch(
+      `${GITHUB_API}/repos/${owner}/${repo}/git/blobs`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          content: file.content,
+          encoding: "utf-8",
+        }),
+      }
+    );
+    if (!blobRes.ok) {
+      const err = await blobRes.json();
+      throw new Error(`Failed to create blob for ${file.path}: ${err.message}`);
+    }
+    const blobData = await blobRes.json();
+    treeItems.push({
+      path: file.path,
+      mode: "100644",
+      type: "blob",
+      sha: blobData.sha,
+    });
+  }
+
+  // 3. 创建 tree
+  const treeRes = await fetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/git/trees`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: treeItems,
+      }),
+    }
+  );
+  if (!treeRes.ok) {
+    const err = await treeRes.json();
+    throw new Error(`Failed to create tree: ${err.message}`);
+  }
+  const treeData = await treeRes.json();
+
+  // 4. 创建 commit
+  const commitRes = await fetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/git/commits`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        message: commitMessage,
+        tree: treeData.sha,
+        parents: parentCommitSha ? [parentCommitSha] : [],
+      }),
+    }
+  );
+  if (!commitRes.ok) {
+    const err = await commitRes.json();
+    throw new Error(`Failed to create commit: ${err.message}`);
+  }
+  const commitData = await commitRes.json();
+
+  // 5. 更新分支引用（或创建新分支）
+  if (parentCommitSha) {
+    // 分支已存在，更新引用
+    const refRes = await fetch(
+      `${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          sha: commitData.sha,
+        }),
+      }
+    );
+    if (!refRes.ok) {
+      const err = await refRes.json();
+      throw new Error(`Failed to update ref: ${err.message}`);
+    }
+  } else {
+    // 分支不存在，创建引用
+    const refRes = await fetch(
+      `${GITHUB_API}/repos/${owner}/${repo}/git/refs`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ref: `refs/heads/${branch}`,
+          sha: commitData.sha,
+        }),
+      }
+    );
+    if (!refRes.ok) {
+      const err = await refRes.json();
+      throw new Error(`Failed to create ref: ${err.message}`);
+    }
+  }
+
+  return { commitSha: commitData.sha };
 }

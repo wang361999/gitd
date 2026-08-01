@@ -76,6 +76,23 @@ export async function POST(request: Request) {
 
     // -------------------- 成功：按阶段流转 --------------------
     if (status === TaskStatus.success) {
+      // 获取用户 token（用于触发下一阶段 workflow 操作用户仓库）
+      const projectUser = await prisma.user.findUnique({
+        where: { id: project.userId },
+        select: { accessToken: true },
+      });
+      if (!projectUser?.accessToken) {
+        await prisma.project.update({
+          where: { id: project.id },
+          data: { status: ProjectStatus.failed },
+        });
+        return NextResponse.json(
+          { error: "未找到用户的 GitHub 访问令牌" },
+          { status: 401 }
+        );
+      }
+      const userToken = projectUser.accessToken;
+
       if (stage === "generate") {
         // generate 成功 -> governing，触发 governance.yml
         // 如果 result 中包含 repoUrl/previewUrl，更新到 project
@@ -115,6 +132,7 @@ export async function POST(request: Request) {
               repo_name: repoName,
               task_id: governanceTask.id,
               callback_url: callbackUrl,
+              user_token: userToken,
             }
           );
           await prisma.task.update({
@@ -200,39 +218,54 @@ export async function POST(request: Request) {
           }
         }
 
-        // governance 成功 -> packaging，触发 package.yml
-        await prisma.project.update({
-          where: { id: project.id },
-          data: { status: ProjectStatus.packaging },
-        });
-
-        const packageTask = await prisma.task.create({
-          data: {
-            projectId: project.id,
-            stage: TaskStage.package,
-            status: TaskStatus.pending,
-          },
-        });
-
-        if (project.repoOwner && project.repoName) {
-          const forgeRepo = await getForgeRepo();
-          const runId = await triggerWorkflow(
-            forgeRepo.owner,
-            forgeRepo.name,
-            "package.yml",
-            "main",
-            {
-              project_type: project.projectType,
-              repo_owner: project.repoOwner,
-              repo_name: project.repoName,
-              task_id: packageTask.id,
-              callback_url: callbackUrl,
-            }
-          );
-          await prisma.task.update({
-            where: { id: packageTask.id },
-            data: { actionsRunId: runId, status: TaskStatus.running },
+        // governance 成功后的流转逻辑
+        // 治理专用项目（governance-only / upload）跳过打包，直接完成
+        // 常规项目（web / desktop / mobile）自动触发打包
+        if (
+          project.projectType === "governance-only" ||
+          project.projectType === "upload"
+        ) {
+          // 治理专用项目：直接标记为完成
+          await prisma.project.update({
+            where: { id: project.id },
+            data: { status: ProjectStatus.done },
           });
+        } else {
+          // 常规项目：触发打包流水线
+          await prisma.project.update({
+            where: { id: project.id },
+            data: { status: ProjectStatus.packaging },
+          });
+
+          const packageTask = await prisma.task.create({
+            data: {
+              projectId: project.id,
+              stage: TaskStage.package,
+              status: TaskStatus.pending,
+            },
+          });
+
+          if (project.repoOwner && project.repoName) {
+            const forgeRepo = await getForgeRepo();
+            const runId = await triggerWorkflow(
+              forgeRepo.owner,
+              forgeRepo.name,
+              "package.yml",
+              "main",
+              {
+                project_type: project.projectType,
+                repo_owner: project.repoOwner,
+                repo_name: project.repoName,
+                task_id: packageTask.id,
+                callback_url: callbackUrl,
+                user_token: userToken,
+              }
+            );
+            await prisma.task.update({
+              where: { id: packageTask.id },
+              data: { actionsRunId: runId, status: TaskStatus.running },
+            });
+          }
         }
       } else if (stage === "package") {
         // package 成功 -> done

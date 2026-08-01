@@ -57,6 +57,7 @@ model User {
   createdAt   DateTime @default(now())
 
   projects    Project[]
+  schedules   GovernanceSchedule[]
 
   @@map("users")
 }
@@ -148,4 +149,22 @@ model Version {
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("versions")
+}
+
+/// 定时治理计划 — 用户配置的自动治理任务
+model GovernanceSchedule {
+  id          String   @id @default(cuid())
+  userId      String
+  repoOwner   String
+  repoName    String
+  frequency   String   @default("weekly") // daily | weekly | monthly
+  enabled     Boolean  @default(true)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("governance_schedules")
 }

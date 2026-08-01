@@ -8,3 +8,5 @@ dist
 out
 .vercel
 tsconfig.tsbuildinfo
+# 构建时自动生成的版本号文件
+public/version.txt

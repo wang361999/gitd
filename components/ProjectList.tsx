@@ -53,6 +53,8 @@ const TYPE_LABELS: Record<string, string> = {
   web: 'Web',
   desktop: '桌面',
   mobile: '移动',
+  'governance-only': '治理',
+  upload: '上传',
 };
 
 function formatDate(iso: string): string {
@@ -140,7 +142,7 @@ export default function ProjectList({
             <p className="mt-1 text-sm text-forge-muted">
               前往首页描述你的需求，生成第一个项目吧
             </p>
-            <Link href="/" className="forge-btn-primary mt-4">
+            <Link href="/new" className="forge-btn-primary mt-4">
               创建项目
             </Link>
           </>

@@ -25,6 +25,10 @@ on:
         description: 回调API地址
         required: true
         type: string
+      user_token:
+        description: 用户的 GitHub OAuth token（用于操作用户仓库）
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -38,11 +42,11 @@ jobs:
       matrix:
         os: ${{ fromJSON(inputs.project_type == 'desktop' && '["windows-latest","macos-latest"]' || '["ubuntu-latest"]') }}
     steps:
-      - name: 1. Checkout 目标仓库代码
+      - name: 1. Checkout 目标仓库代码（使用用户 token）
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.repo_owner }}/${{ inputs.repo_name }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ inputs.user_token }}
 
       - name: 2. Checkout Agent Forge 脚本
         uses: actions/checkout@v4
@@ -77,9 +81,9 @@ jobs:
             --project-type "${{ inputs.project_type }}" \
             --platform "${PLATFORM}"
 
-      - name: 6. 创建 GitHub Release 到目标仓库并上传构建产物
+      - name: 6. 创建 GitHub Release 到目标仓库并上传构建产物（使用用户 token）
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ inputs.user_token }}
         run: |
           # 收集存在的构建产物文件
           FILES=""
