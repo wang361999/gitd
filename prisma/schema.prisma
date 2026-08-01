@@ -82,6 +82,12 @@ model Project {
   governanceReports GovernanceReport[]
   loreRecords LoreRecord[]
   versions    Version[]
+  architecturePlans ArchitecturePlan[]
+  codeReviews       CodeReview[]
+  chatSessions      ChatSession[]
+  refactorings      Refactoring[]
+  bugFixes          BugFix[]
+  performanceReports PerformanceReport[]
 
   @@map("projects")
 }
@@ -167,4 +173,134 @@ model GovernanceSchedule {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("governance_schedules")
+}
+
+// v0.2.0: 架构设计记录
+model ArchitecturePlan {
+  id           String   @id @default(cuid())
+  projectId    String
+  summary      String   @db.Text
+  techStack    Json
+  fileStructure Json
+  codingRules  Json
+  dependencies Json
+  architecture Json?
+  testingStrategy String? @db.Text
+  securityConsiderations String? @db.Text
+  createdAt    DateTime @default(now())
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@map("architecture_plans")
+}
+
+// v0.2.0: AI 代码审查记录
+model CodeReview {
+  id            String   @id @default(cuid())
+  taskId        String?
+  projectId     String
+  overallScore  Int      @default(0)
+  dimensions    Json     // { functionality, quality, performance, security, robustness }
+  issues        Json     // [{ type, severity, file, message, suggestion }]
+  fixedIssues   Int      @default(0)
+  reviewModel   String?
+  createdAt     DateTime @default(now())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@map("code_reviews")
+}
+
+// v0.3.0: AI 对话记录
+model ChatSession {
+  id          String   @id @default(cuid())
+  projectId   String
+  userId      String
+  title       String   @default("新对话")
+  messages    Json     // [{ role, content, fileContext, timestamp }]
+  model       String   @default("gpt-4o")
+  contextFiles Json?   // ["file1.ts", "file2.ts"]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@map("chat_sessions")
+}
+
+// v0.4.0: 重构记录
+model Refactoring {
+  id          String   @id @default(cuid())
+  projectId   String
+  type        String   // extract-method, extract-class, rename, etc.
+  filePath    String
+  beforeCode  String   @db.Text
+  afterCode   String   @db.Text
+  reason      String   @db.Text
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@map("refactorings")
+}
+
+// v0.4.0: Bug 修复记录
+model BugFix {
+  id          String   @id @default(cuid())
+  projectId   String
+  errorLog    String   @db.Text
+  rootCause   String   @db.Text
+  fixCode     String   @db.Text
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@map("bug_fixes")
+}
+
+// v0.4.0: 性能分析记录
+model PerformanceReport {
+  id          String   @id @default(cuid())
+  projectId   String
+  score       Int      @default(0)
+  issues      Json     // [{ type, severity, file, description, suggestion }]
+  optimizations Json   // [{ category, impact, description }]
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@map("performance_reports")
+}
+
+// v1.0.0: 自定义 AI Agent
+model CustomAgent {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  description   String?  @db.Text
+  systemPrompt  String   @db.Text
+  tools         Json     // ["code-gen", "review", "test", "refactor", "bugfix"]
+  knowledgeBase Json?    // { entries: [{ question, answer }] }
+  model         String   @default("gpt-4o")
+  isPublic      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@map("custom_agents")
+}
+
+// v1.0.0: 知识库
+model KnowledgeEntry {
+  id          String   @id @default(cuid())
+  projectId   String?
+  agentId     String?
+  category    String   @default("general") // architecture, bug, decision, convention
+  question    String   @db.Text
+  answer      String   @db.Text
+  source      String?  // commit, manual, ai-generated
+  createdAt   DateTime @default(now())
+  @@map("knowledge_entries")
+}
+
+// v1.0.0: 分析事件
+model AnalyticsEvent {
+  id          String   @id @default(cuid())
+  userId      String?
+  projectId   String?
+  eventType   String   // code-generated, code-reviewed, bug-fixed, refactored, chat-message
+  model       String?
+  tokensUsed  Int      @default(0)
+  duration    Int      @default(0) // milliseconds
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  @@map("analytics_events")
 }

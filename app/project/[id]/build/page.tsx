@@ -29,6 +29,64 @@ interface StatusResponse {
   logs?: string;
 }
 
+/* ============================================================
+   增强的构建阶段定义 (SSE 实时进度)
+   ============================================================ */
+
+interface EnhancedStage {
+  id: string;
+  label: string;
+  description: string;
+  status: 'pending' | 'running' | 'success' | 'failed';
+  /** 当前阶段的进度 0-100 */
+  progress: number;
+  /** 阶段产生的日志消息 */
+  messages: Array<{ text: string; time: string }>;
+}
+
+const ENHANCED_STAGES: EnhancedStage[] = [
+  {
+    id: 'analyze',
+    label: '架构分析',
+    description: '分析需求并生成架构设计方案',
+    status: 'pending',
+    progress: 0,
+    messages: [],
+  },
+  {
+    id: 'generate',
+    label: '逐文件生成',
+    description: '按架构设计逐个生成源代码文件',
+    status: 'pending',
+    progress: 0,
+    messages: [],
+  },
+  {
+    id: 'review',
+    label: 'AI 审查',
+    description: '对生成的代码进行五维度 AI 审查',
+    status: 'pending',
+    progress: 0,
+    messages: [],
+  },
+  {
+    id: 'fix',
+    label: '自动修复',
+    description: '根据审查结果自动修复代码问题',
+    status: 'pending',
+    progress: 0,
+    messages: [],
+  },
+  {
+    id: 'test',
+    label: '测试生成',
+    description: '生成单元测试并验证代码正确性',
+    status: 'pending',
+    progress: 0,
+    messages: [],
+  },
+];
+
 /**
  * 根据 API 返回的 progress (1-7) 和 status 映射到 7 步 UI 进度
  *
@@ -72,6 +130,144 @@ function mapStepsFromProgress(
   });
 }
 
+/* ============================================================
+   增强阶段卡片组件
+   ============================================================ */
+
+const STAGE_STATUS_META: Record<
+  EnhancedStage['status'],
+  { icon: string; color: string; bgColor: string; label: string }
+> = {
+  pending: {
+    icon: 'M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0zM8 3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 3z',
+    color: 'text-forge-muted',
+    bgColor: 'bg-forge-muted/10',
+    label: '等待中',
+  },
+  running: {
+    icon: 'M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0zM8 3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 3z',
+    color: 'text-forge-accent',
+    bgColor: 'bg-forge-accent/10',
+    label: '进行中',
+  },
+  success: {
+    icon: 'M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z',
+    color: 'text-forge-green',
+    bgColor: 'bg-forge-green/10',
+    label: '已完成',
+  },
+  failed: {
+    icon: 'M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z',
+    color: 'text-forge-red',
+    bgColor: 'bg-forge-red/10',
+    label: '失败',
+  },
+};
+
+function EnhancedStageCard({ stage }: { stage: EnhancedStage }) {
+  const meta = STAGE_STATUS_META[stage.status];
+  const isRunning = stage.status === 'running';
+  const isCompleted = stage.status === 'success';
+  const isFailed = stage.status === 'failed';
+
+  return (
+    <div
+      className={`rounded-lg border p-3 transition-colors ${
+        isRunning
+          ? 'border-forge-accent/30 bg-forge-accent/5'
+          : isCompleted
+            ? 'border-forge-green/20 bg-forge-green/5'
+            : isFailed
+              ? 'border-forge-red/30 bg-forge-red/5'
+              : 'border-forge-border bg-forge-surface'
+      }`}
+    >
+      {/* 阶段头部 */}
+      <div className="flex items-center gap-3">
+        {/* 状态图标 */}
+        <div
+          className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${meta.bgColor} ${meta.color}`}
+        >
+          {isRunning ? (
+            <svg
+              className="h-4 w-4 animate-forge-spin"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d={meta.icon} />
+            </svg>
+          ) : (
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d={meta.icon} />
+            </svg>
+          )}
+        </div>
+
+        {/* 阶段信息 */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium text-forge-ink">
+              {stage.label}
+            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className={`rounded px-1.5 py-0.5 text-xs ${meta.bgColor} ${meta.color}`}
+              >
+                {meta.label}
+              </span>
+              {(isRunning || isCompleted) && (
+                <span className="text-xs font-mono text-forge-muted">
+                  {stage.progress}%
+                </span>
+              )}
+            </div>
+          </div>
+          <p className="mt-0.5 text-xs text-forge-muted">
+            {stage.description}
+          </p>
+        </div>
+      </div>
+
+      {/* 进度条 */}
+      {(isRunning || isCompleted) && (
+        <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-forge-border">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              isCompleted
+                ? 'bg-forge-green'
+                : 'bg-forge-accent'
+            }`}
+            style={{ width: `${stage.progress}%` }}
+          />
+        </div>
+      )}
+
+      {/* 阶段日志消息 */}
+      {stage.messages.length > 0 && (
+        <div className="mt-2 space-y-0.5 border-l-2 border-forge-border pl-2">
+          {stage.messages.slice(-3).map((msg, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-1.5 font-mono text-xs text-forge-muted"
+            >
+              <span className="flex-shrink-0 text-forge-accent/60">
+                {msg.time}
+              </span>
+              <span className="truncate">{msg.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BuildPageContent() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -87,6 +283,13 @@ function BuildPageContent() {
   const [allDone, setAllDone] = useState(false);
   const [hasFailed, setHasFailed] = useState(false);
   const [retrying, setRetrying] = useState(false);
+
+  // SSE 增强阶段状态
+  const [enhancedStages, setEnhancedStages] = useState<EnhancedStage[]>(
+    ENHANCED_STAGES.map((s) => ({ ...s, messages: [] }))
+  );
+  const [sseConnected, setSseConnected] = useState(false);
+  const [streamLogs, setStreamLogs] = useState<string[]>([]);
 
   const fetchStatus = useCallback(async () => {
     if (!taskId) {
@@ -144,6 +347,161 @@ function BuildPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, allDone, hasFailed]);
 
+  /* -------------------- SSE 实时进度 -------------------- */
+  useEffect(() => {
+    if (!taskId || allDone || hasFailed) return;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      // 连接 SSE 流，传递 projectId 和 taskId
+      eventSource = new EventSource(
+        `/api/generate/stream?projectId=${encodeURIComponent(projectId)}&taskId=${encodeURIComponent(taskId)}`
+      );
+
+      eventSource.onopen = () => {
+        setSseConnected(true);
+      };
+
+      // 监听 stage 事件 (阶段状态变更)
+      eventSource.addEventListener('stage', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          const stageId = data.stage || data.id;
+          const stageStatus = data.status || 'running';
+
+          setEnhancedStages((prev) =>
+            prev.map((s) => {
+              if (s.id === stageId) {
+                return { ...s, status: stageStatus };
+              }
+              // 将之前的阶段标记为已完成
+              const currentIdx = prev.findIndex((st) => st.id === stageId);
+              const thisIdx = prev.findIndex((st) => st.id === s.id);
+              if (thisIdx < currentIdx && s.status !== 'failed') {
+                return { ...s, status: 'success', progress: 100 };
+              }
+              return s;
+            })
+          );
+        } catch {
+          // 忽略解析错误
+        }
+      });
+
+      // 监听 progress 事件 (阶段进度更新)
+      eventSource.addEventListener('progress', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          const stageId = data.stage || data.id;
+          const progressVal = Math.min(100, Math.max(0, data.progress || 0));
+
+          setEnhancedStages((prev) =>
+            prev.map((s) =>
+              s.id === stageId
+                ? {
+                    ...s,
+                    progress: progressVal,
+                    status: progressVal >= 100 ? 'success' : 'running',
+                  }
+                : s
+            )
+          );
+        } catch {
+          // 忽略解析错误
+        }
+      });
+
+      // 监听 message 事件 (日志消息)
+      eventSource.addEventListener('message', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          const text = data.text || data.message || data.content || '';
+          const stageId = data.stage || data.id;
+          const time = new Date().toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          });
+
+          if (text) {
+            setStreamLogs((prev) => [...prev, text].slice(-100));
+          }
+
+          if (stageId && text) {
+            setEnhancedStages((prev) =>
+              prev.map((s) =>
+                s.id === stageId
+                  ? {
+                      ...s,
+                      messages: [...s.messages, { text, time }].slice(-20),
+                    }
+                  : s
+              )
+            );
+          }
+        } catch {
+          // 如果不是 JSON，作为纯文本日志处理
+          if (e.data) {
+            setStreamLogs((prev) => [...prev, e.data].slice(-100));
+          }
+        }
+      });
+
+      // 监听 complete 事件 (构建完成)
+      eventSource.addEventListener('complete', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          setEnhancedStages((prev) =>
+            prev.map((s) => ({ ...s, status: 'success', progress: 100 }))
+          );
+          if (data.result) {
+            setResult(data.result);
+          }
+          setAllDone(true);
+          setLoading(false);
+        } catch {
+          // 忽略
+        }
+        eventSource?.close();
+        setSseConnected(false);
+      });
+
+      // 监听 error 事件 (构建失败)
+      eventSource.addEventListener('error', (e: MessageEvent) => {
+        try {
+          const data = e.data ? JSON.parse(e.data) : {};
+          if (data.message) {
+            setError(data.message);
+          }
+        } catch {
+          // 连接级别的 error 事件 (非自定义 error 事件)
+          // EventSource 会自动重连，仅在连接彻底失败时处理
+        }
+        // 注意: 这里不关闭 EventSource，让浏览器自动重连
+        // 只有在收到自定义 error 事件时才处理
+      });
+
+      // 连接错误处理 (网络断开等)
+      eventSource.onerror = () => {
+        setSseConnected(false);
+        // 不在这里设置 hasFailed，因为轮询仍然在工作
+        // SSE 断开后轮询会继续获取状态
+      };
+    } catch {
+      // EventSource 创建失败，静默处理，依赖轮询
+      setSseConnected(false);
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      setSseConnected(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId, projectId, allDone, hasFailed]);
+
   const completedCount = steps.filter((s) => s.status === 'success').length;
   const progress = Math.round((completedCount / steps.length) * 100);
 
@@ -172,6 +530,8 @@ function BuildPageContent() {
       // 重置状态并跳转到新的构建进度页
       setHasFailed(false);
       setSteps(DEFAULT_STEPS.map((s) => ({ ...s })));
+      setEnhancedStages(ENHANCED_STAGES.map((s) => ({ ...s, messages: [] })));
+      setStreamLogs([]);
       setLoading(true);
       // 使用 window.location 跳转到新的 taskId 页面
       window.location.href = `/project/${projectId}/build?taskId=${data.taskId}`;
@@ -232,6 +592,61 @@ function BuildPageContent() {
         hasFailed={hasFailed}
         allDone={allDone}
       />
+
+      {/* SSE 实时进度 (增强阶段) */}
+      <div className="forge-card space-y-4 p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-forge-ink">
+            实时构建进度
+          </h3>
+          <div className="flex items-center gap-2">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                sseConnected ? 'bg-forge-green animate-forge-pulse' : 'bg-forge-muted'
+              }`}
+            />
+            <span className="text-xs text-forge-muted">
+              {sseConnected ? 'SSE 已连接' : '轮询模式'}
+            </span>
+          </div>
+        </div>
+
+        {/* 阶段列表 */}
+        <div className="space-y-3">
+          {enhancedStages.map((stage) => (
+            <EnhancedStageCard key={stage.id} stage={stage} />
+          ))}
+        </div>
+
+        {/* 实时日志流 */}
+        {streamLogs.length > 0 && (
+          <div className="mt-4">
+            <div className="mb-2 flex items-center gap-2">
+              <svg
+                className="h-4 w-4 text-forge-muted"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z" />
+              </svg>
+              <span className="text-xs font-medium text-forge-muted">
+                实时日志
+              </span>
+            </div>
+            <div className="max-h-48 overflow-y-auto rounded-md border border-forge-border bg-forge-bg p-3">
+              {streamLogs.map((log, i) => (
+                <div
+                  key={i}
+                  className="border-b border-forge-border/50 py-1 font-mono text-xs text-forge-muted last:border-0"
+                >
+                  <span className="text-forge-accent">{'>'}</span> {log}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* 错误信息 */}
       {error && hasFailed && (
@@ -297,21 +712,65 @@ function BuildPageContent() {
 
       {/* 完成后跳转入口 */}
       {allDone && (
-        <div className="flex justify-center">
-          <Link
-            href={`/project/${projectId}`}
-            className="forge-btn-accent"
-          >
-            查看项目详情
-            <svg
-              className="h-4 w-4"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              aria-hidden="true"
+        <div className="space-y-4">
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link
+              href={`/design/${projectId}`}
+              className="forge-btn-secondary text-sm"
             >
-              <path d="M8.22 2.97a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06l2.97-2.97H3.5a.75.75 0 010-1.5h7.69L8.22 4.03a.75.75 0 010-1.06z" />
-            </svg>
-          </Link>
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M4.72 3.22a.75.75 0 011.06 1.06L2.06 8l3.72 3.72a.75.75 0 11-1.06 1.06L.47 8.53a.75.75 0 010-1.06l4.25-4.25zm6.56 0a.75.75 0 10-1.06 1.06L13.94 8l-3.72 3.72a.75.75 0 101.06 1.06l4.25-4.25a.75.75 0 000-1.06l-4.25-4.25z" />
+              </svg>
+              查看架构设计
+            </Link>
+            <Link
+              href={`/project/${projectId}/review`}
+              className="forge-btn-secondary text-sm"
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M8 0a.75.75 0 01.336.08l6 3a.75.75 0 01.414.67v3.5c0 3.59-2.094 6.78-5.336 8.25a.75.75 0 01-.664 0C5.494 13.94 3.4 10.75 3.4 7.25v-3.5a.75.75 0 01.414-.67l6-3A.75.75 0 018 0z" />
+              </svg>
+              查看审查报告
+            </Link>
+            <Link
+              href={`/project/${projectId}/ide`}
+              className="forge-btn-secondary text-sm"
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75z" />
+              </svg>
+              在线编辑代码
+            </Link>
+            <Link
+              href={`/project/${projectId}`}
+              className="forge-btn-accent text-sm"
+            >
+              查看项目详情
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M8.22 2.97a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06l2.97-2.97H3.5a.75.75 0 010-1.5h7.69L8.22 4.03a.75.75 0 010-1.06z" />
+              </svg>
+            </Link>
+          </div>
         </div>
       )}
     </div>
