@@ -49,39 +49,66 @@ const ICONS: Record<NonNullable<StatsCardProps['icon']>, React.ReactElement> = {
   ),
 };
 
-const COLOR_MAP = {
+const THEME: Record<
+  NonNullable<StatsCardProps['icon']>,
+  {
+    bar: string;
+    iconBg: string;
+    iconText: string;
+    iconGlow: string;
+    suffix: string;
+  }
+> = {
   total: {
+    bar: 'from-forge-accent to-forge-purple',
     iconBg: 'bg-forge-accent/10',
     iconText: 'text-forge-accent',
+    iconGlow: 'shadow-[0_0_18px_-2px_rgba(88,166,255,0.45)]',
+    suffix: '累计统计',
   },
   success: {
+    bar: 'from-forge-green to-forge-accent',
     iconBg: 'bg-forge-green/10',
     iconText: 'text-forge-green',
+    iconGlow: 'shadow-[0_0_18px_-2px_rgba(63,185,80,0.45)]',
+    suffix: '已交付',
   },
   failed: {
+    bar: 'from-forge-red to-forge-yellow',
     iconBg: 'bg-forge-red/10',
     iconText: 'text-forge-red',
+    iconGlow: 'shadow-[0_0_18px_-2px_rgba(248,81,73,0.45)]',
+    suffix: '需关注',
   },
   progress: {
+    bar: 'from-forge-yellow to-forge-accent',
     iconBg: 'bg-forge-yellow/10',
     iconText: 'text-forge-yellow',
+    iconGlow: 'shadow-[0_0_18px_-2px_rgba(210,153,34,0.45)]',
+    suffix: '运行中',
   },
 };
 
 export default function StatsCard({ label, value, icon = 'total' }: StatsCardProps) {
-  const colors = COLOR_MAP[icon];
+  const theme = THEME[icon];
 
   return (
-    <div className="forge-card p-5">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="forge-card-pro forge-hover-lift group relative overflow-hidden p-5">
+      {/* 左侧渐变强调条 */}
+      <div
+        className={`absolute inset-y-0 left-0 w-1 bg-gradient-to-b ${theme.bar}`}
+      />
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-sm text-forge-muted">{label}</p>
-          <p className="mt-2 text-3xl font-semibold text-forge-ink">
+          <p className="forge-animate-count mt-2 font-mono text-3xl font-semibold tabular-nums text-forge-ink">
             {value}
           </p>
+          <p className={`mt-1 text-xs ${theme.iconText}`}>{theme.suffix}</p>
         </div>
         <div
-          className={`flex h-11 w-11 items-center justify-center rounded-lg ${colors.iconBg} ${colors.iconText}`}
+          className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${theme.iconBg} ${theme.iconText} ${theme.iconGlow}`}
         >
           {ICONS[icon]}
         </div>

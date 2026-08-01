@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
 
 // ============================================================
 // 类型定义
@@ -62,14 +62,14 @@ type TabKey = 'dashboard' | 'projects' | 'settings' | 'users';
 
 const STATUS_META: Record<
   string,
-  { label: string; color: string; bar: string }
+  { label: string; color: string; bar: string; bg: string; ring: string; dot: string }
 > = {
-  draft: { label: '草稿', color: 'text-forge-muted', bar: 'bg-forge-muted' },
-  building: { label: '构建中', color: 'text-forge-accent', bar: 'bg-forge-accent' },
-  governing: { label: '治理中', color: 'text-forge-purple', bar: 'bg-forge-purple' },
-  packaging: { label: '打包中', color: 'text-forge-yellow', bar: 'bg-forge-yellow' },
-  done: { label: '已完成', color: 'text-forge-green', bar: 'bg-forge-green' },
-  failed: { label: '失败', color: 'text-forge-red', bar: 'bg-forge-red' },
+  draft: { label: '草稿', color: 'text-forge-muted', bar: 'bg-forge-muted', bg: 'bg-forge-muted/10', ring: 'border-forge-muted/30', dot: 'bg-forge-muted' },
+  building: { label: '构建中', color: 'text-forge-accent', bar: 'bg-forge-accent', bg: 'bg-forge-accent/10', ring: 'border-forge-accent/30', dot: 'bg-forge-accent' },
+  governing: { label: '治理中', color: 'text-forge-purple', bar: 'bg-forge-purple', bg: 'bg-forge-purple/10', ring: 'border-forge-purple/30', dot: 'bg-forge-purple' },
+  packaging: { label: '打包中', color: 'text-forge-yellow', bar: 'bg-forge-yellow', bg: 'bg-forge-yellow/10', ring: 'border-forge-yellow/30', dot: 'bg-forge-yellow' },
+  done: { label: '已完成', color: 'text-forge-green', bar: 'bg-forge-green', bg: 'bg-forge-green/10', ring: 'border-forge-green/30', dot: 'bg-forge-green' },
+  failed: { label: '失败', color: 'text-forge-red', bar: 'bg-forge-red', bg: 'bg-forge-red/10', ring: 'border-forge-red/30', dot: 'bg-forge-red' },
 };
 
 const STATUS_ORDER = ['draft', 'building', 'governing', 'packaging', 'done', 'failed'];
@@ -100,8 +100,59 @@ function formatDate(iso: string): string {
 }
 
 function getStatusMeta(status: string) {
-  return STATUS_META[status] || { label: status, color: 'text-forge-muted', bar: 'bg-forge-muted' };
+  return (
+    STATUS_META[status] || {
+      label: status,
+      color: 'text-forge-muted',
+      bar: 'bg-forge-muted',
+      bg: 'bg-forge-muted/10',
+      ring: 'border-forge-muted/30',
+      dot: 'bg-forge-muted',
+    }
+  );
 }
+
+// ============================================================
+// 图标组件（统一风格，viewBox 16x16）
+// ============================================================
+
+function Icon({ path, className = 'h-4 w-4' }: { path: string; className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d={path} />
+    </svg>
+  );
+}
+
+const ICON_PATHS = {
+  dashboard:
+    'M1.75 1A1.75 1.75 0 000 2.75v3.5C0 7.216.784 8 1.75 8h3.5A1.75 1.75 0 007 6.25v-3.5A1.75 1.75 0 005.25 1h-3.5zM1.75 9A1.75 1.75 0 000 10.75v2.5C0 14.216.784 15 1.75 15h3.5A1.75 1.75 0 007 13.25v-2.5A1.75 1.75 0 005.25 9h-3.5zM9 10.75A1.75 1.75 0 0110.75 9h3.5A1.75 1.75 0 0116 10.75v2.5A1.75 1.75 0 0114.25 15h-3.5A1.75 1.75 0 019 13.25v-2.5zM9 2.75A1.75 1.75 0 0110.75 1h3.5A1.75 1.75 0 0116 2.75v3.5A1.75 1.75 0 0114.25 8h-3.5A1.75 1.75 0 019 6.25v-3.5z',
+  projects:
+    'M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z',
+  settings:
+    'M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C5.81.645 6.356.095 7.099.03 7.333.01 7.566 0 7.8 0ZM8 5a3 3 0 100 6 3 3 0 000-6Z',
+  users:
+    'M5.5 3.5a2 2 0 11-4 0 2 2 0 014 0zM3 7c1.38 0 2.5 1.12 2.5 2.5V12h-5V9.5C.5 8.12 1.62 7 3 7zm9.5-3.5a2 2 0 11-4 0 2 2 0 014 0zM10 7c1.38 0 2.5 1.12 2.5 2.5V12h-5V9.5C7.5 8.12 8.62 7 10 7z',
+  logout:
+    'M2 2.75A2.75 2.75 0 014.75 0h3.5a.75.75 0 010 1.5h-3.5c-.69 0-1.25.56-1.25 1.25v10.5c0 .69.56 1.25 1.25 1.25h3.5a.75.75 0 010 1.5h-3.5A2.75 2.75 0 012 13.25V2.75zm9.994 2.079a.75.75 0 01-.026 1.06L10.06 7.75h4.69a.75.75 0 010 1.5h-4.69l1.908 1.86a.75.75 0 11-1.04 1.08l-3.182-3.106a.75.75 0 010-1.08l3.182-3.106a.75.75 0 011.066.026z',
+  trash:
+    'M11 1.75V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675l.66 6.6a.25.25 0 00.249.225h5.19a.25.25 0 00.249-.225l.66-6.6a.75.75 0 011.492.149l-.66 6.6A1.75 1.75 0 0110.595 15h-5.19a1.75 1.75 0 01-1.741-1.575l-.66-6.6a.75.75 0 011.492-.15z',
+  alert:
+    'M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0114.082 15H1.918a1.75 1.75 0 01-1.543-2.575L6.457 1.047zM8 5a.75.75 0 01.75.75v2.5a.75.75 0 01-1.5 0v-2.5A.75.75 0 018 5zm1 6a1 1 0 11-2 0 1 1 0 012 0z',
+  error:
+    'M2.34 3.34a8 8 0 11.32.32A8 8 0 012.34 3.34zM8 0a8 8 0 100 16A8 8 0 008 0zm.75 4.75a.75.75 0 00-1.5 0V8a.75.75 0 001.5 0V4.75zM8 12a1 1 0 100-2 1 1 0 000 2z',
+  people:
+    'M5.5 3.5a2 2 0 11-4 0 2 2 0 014 0zM3 7c1.38 0 2.5 1.12 2.5 2.5V12h-5V9.5C.5 8.12 1.62 7 3 7zm9.5-3.5a2 2 0 11-4 0 2 2 0 014 0zM10 7c1.38 0 2.5 1.12 2.5 2.5V12h-5V9.5C7.5 8.12 8.62 7 10 7z',
+  folder:
+    'M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z',
+  checklist:
+    'M2.5 1.75A1.75 1.75 0 014.25 0h8.5A1.75 1.75 0 0114.5 1.75v12.5A1.75 1.75 0 0112.75 16h-8.5A1.75 1.75 0 012.5 14.25V1.75zm2.75 3.5a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zM4.5 9.5a.75.75 0 01.75-.75h6.5a.75.75 0 010 1.5h-6.5A.75.75 0 014.5 9.5zM5.25 12a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z',
+  report:
+    'M0 1.75A.75.75 0 01.75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0111.006 1h4.245a.75.75 0 01.75.75v10.5a.75.75 0 01-.75.75h-4.507a2.25 2.25 0 00-1.591.659l-.622.621a.75.75 0 01-1.06 0l-.622-.621A2.25 2.25 0 005.258 13H.75a.75.75 0 01-.75-.75V1.75zm8.755 3a2.25 2.25 0 012.25-2.25H14.5v9h-3.757l-.246.226a3.75 3.75 0 01-.742.553V4.75z',
+  link: 'M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z',
+  inbox:
+    'M2.8 2.06A1.75 1.75 0 014.41 1h7.18c.7 0 1.333.417 1.61 1.06l2.74 6.395c.04.093.06.194.06.295v4.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25v-4.5c0-.101.02-.202.06-.295L2.8 2.06zM4.41 2.5a.25.25 0 00-.23.152L1.713 8H5.75a.75.75 0 01.6.3l1.127 1.5h2.046l1.127-1.5a.75.75 0 01.6-.3h4.037L11.82 2.652a.25.25 0 00-.23-.152H4.41z',
+};
 
 // ============================================================
 // 主组件
@@ -185,7 +236,10 @@ export default function AdminPage() {
   if (!authChecked) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-forge-spin rounded-full border-2 border-forge-border border-t-forge-accent" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-9 w-9 animate-forge-spin rounded-full border-2 border-forge-border border-t-forge-accent" />
+          <span className="text-sm text-forge-muted">正在校验权限...</span>
+        </div>
       </div>
     );
   }
@@ -193,14 +247,25 @@ export default function AdminPage() {
   // -------------------- 登录界面 --------------------
   if (!isLoggedIn) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center px-4">
-        <div className="forge-card w-full max-w-sm p-8 forge-animate-fade-in">
+      <div className="relative flex min-h-[82vh] items-center justify-center overflow-hidden px-4">
+        {/* 背景光晕 */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-32 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-forge-accent/10 blur-3xl" />
+          <div className="absolute -bottom-20 right-1/4 h-72 w-72 rounded-full bg-forge-purple/10 blur-3xl" />
+          <div className="absolute left-1/4 top-1/3 h-56 w-56 rounded-full bg-forge-green/5 blur-3xl" />
+        </div>
+
+        <div className="forge-card-pro forge-glass forge-hover-lift relative w-full max-w-md p-8 forge-animate-fade-in-up">
+          {/* 顶部渐变光带 */}
+          <div className="forge-top-bar absolute inset-x-0 top-0 h-0.5 rounded-t-xl" />
+
+          {/* Logo */}
           <div className="mb-6 flex flex-col items-center text-center">
-            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-forge-accent text-xl font-bold text-white">
+            <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-forge-accent to-forge-purple text-2xl font-bold text-white shadow-lg shadow-forge-accent/30">
               A
             </span>
-            <h1 className="text-xl font-bold text-forge-ink">Agent Forge Admin</h1>
-            <p className="mt-1 text-sm text-forge-muted">后台管理控制台</p>
+            <h1 className="forge-text-gradient text-xl font-bold">Agent Forge Admin</h1>
+            <p className="mt-1 text-sm text-forge-muted">企业级后台管理控制台</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -208,20 +273,28 @@ export default function AdminPage() {
               <label className="mb-1.5 block text-sm font-medium text-forge-ink">
                 管理员密码
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="请输入管理员密码"
-                autoFocus
-                className="forge-input w-full"
-                disabled={loginLoading}
-              />
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-forge-muted">
+                  <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M4 4a4 4 0 018 0v2h.25c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0112.25 15h-8.5A1.75 1.75 0 012 13.25v-5.5C2 6.784 2.784 6 3.75 6H4V4zm6.5 2V4a2.5 2.5 0 00-5 0v2h5z" />
+                  </svg>
+                </span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="请输入管理员密码"
+                  autoFocus
+                  className="forge-input w-full pl-9"
+                  disabled={loginLoading}
+                />
+              </div>
             </div>
 
             {loginError && (
-              <div className="rounded-md border border-forge-red/30 bg-forge-red/10 px-3 py-2 text-sm text-forge-red">
-                {loginError}
+              <div className="flex items-start gap-2 rounded-lg border border-forge-red/30 bg-forge-red/10 px-3 py-2.5 text-sm text-forge-red forge-animate-fade-in">
+                <Icon path={ICON_PATHS.error} className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{loginError}</span>
               </div>
             )}
 
@@ -236,15 +309,21 @@ export default function AdminPage() {
                   登录中...
                 </>
               ) : (
-                '登录'
+                <>
+                  <Icon path={ICON_PATHS.logout} className="h-4 w-4 rotate-180" />
+                  登录控制台
+                </>
               )}
             </button>
           </form>
 
-          <div className="mt-5 rounded-md border border-forge-border bg-forge-bg px-3 py-2.5 text-center text-xs text-forge-muted">
-            默认密码: <span className="font-mono text-forge-yellow">forge-admin-2026</span>
-            <br />
-            （首次使用请尽快修改）
+          <div className="mt-6 flex items-start gap-2.5 rounded-lg border border-forge-border bg-forge-bg/60 px-3.5 py-2.5">
+            <Icon path={ICON_PATHS.alert} className="mt-0.5 h-4 w-4 shrink-0 text-forge-yellow" />
+            <div className="text-xs text-forge-muted">
+              默认密码：<span className="font-mono text-forge-yellow">forge-admin-2026</span>
+              <br />
+              首次使用后请尽快通过环境变量修改
+            </div>
           </div>
         </div>
       </div>
@@ -252,91 +331,97 @@ export default function AdminPage() {
   }
 
   // -------------------- 后台主界面 --------------------
-  const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
-    {
-      key: 'dashboard',
-      label: '仪表盘',
-      icon: (
-        <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M1.75 1A1.75 1.75 0 000 2.75v3.5C0 7.216.784 8 1.75 8h3.5A1.75 1.75 0 007 6.25v-3.5A1.75 1.75 0 005.25 1h-3.5zM1.75 9A1.75 1.75 0 000 10.75v2.5C0 14.216.784 15 1.75 15h3.5A1.75 1.75 0 007 13.25v-2.5A1.75 1.75 0 005.25 9h-3.5zM9 10.75A1.75 1.75 0 0110.75 9h3.5A1.75 1.75 0 0116 10.75v2.5A1.75 1.75 0 0114.25 15h-3.5A1.75 1.75 0 019 13.25v-2.5zM9 2.75A1.75 1.75 0 0110.75 1h3.5A1.75 1.75 0 0116 2.75v3.5A1.75 1.75 0 0114.25 8h-3.5A1.75 1.75 0 019 6.25v-3.5z" />
-        </svg>
-      ),
-    },
-    {
-      key: 'projects',
-      label: '项目管理',
-      icon: (
-        <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z" />
-        </svg>
-      ),
-    },
-    {
-      key: 'settings',
-      label: '系统配置',
-      icon: (
-        <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C5.81.645 6.356.095 7.099.03 7.333.01 7.566 0 7.8 0ZM8 5a3 3 0 100 6 3 3 0 000-6Z" />
-        </svg>
-      ),
-    },
-    {
-      key: 'users',
-      label: '用户管理',
-      icon: (
-        <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M5.5 3.5a2 2 0 11-4 0 2 2 0 014 0zM3 7c1.38 0 2.5 1.12 2.5 2.5V12h-5V9.5C.5 8.12 1.62 7 3 7zm9.5-3.5a2 2 0 11-4 0 2 2 0 014 0zM10 7c1.38 0 2.5 1.12 2.5 2.5V12h-5V9.5C7.5 8.12 8.62 7 10 7z" />
-        </svg>
-      ),
-    },
+  const TABS: Array<{ key: TabKey; label: string; section: string; icon: React.ReactNode }> = [
+    { key: 'dashboard', label: '仪表盘', section: '概览', icon: <Icon path={ICON_PATHS.dashboard} /> },
+    { key: 'projects', label: '项目管理', section: '管理', icon: <Icon path={ICON_PATHS.projects} /> },
+    { key: 'settings', label: '系统配置', section: '管理', icon: <Icon path={ICON_PATHS.settings} /> },
+    { key: 'users', label: '用户管理', section: '管理', icon: <Icon path={ICON_PATHS.users} /> },
   ];
 
   return (
     <div className="min-h-[80vh] space-y-6">
       {/* 顶部导航 */}
-      <div className="forge-card flex items-center justify-between px-5 py-4">
+      <header className="forge-glass forge-top-bar relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-xl px-5 py-3.5">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-forge-accent text-lg font-bold text-white">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-forge-accent to-forge-purple text-lg font-bold text-white shadow-md shadow-forge-accent/30">
             A
           </span>
           <div>
-            <h1 className="text-lg font-bold text-forge-ink">Agent Forge Admin</h1>
-            <p className="text-xs text-forge-muted">后台管理控制台</p>
+            <h1 className="forge-text-gradient text-lg font-bold leading-tight">Agent Forge Admin</h1>
+            <p className="text-xs text-forge-muted">企业级后台管理控制台</p>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="forge-btn-secondary text-sm"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-            <path d="M2 2.75A2.75 2.75 0 014.75 0h3.5a.75.75 0 010 1.5h-3.5c-.69 0-1.25.56-1.25 1.25v10.5c0 .69.56 1.25 1.25 1.25h3.5a.75.75 0 010 1.5h-3.5A2.75 2.75 0 012 13.25V2.75zm9.994 2.079a.75.75 0 01-.026 1.06L10.06 7.75h4.69a.75.75 0 010 1.5h-4.69l1.908 1.86a.75.75 0 11-1.04 1.08l-3.182-3.106a.75.75 0 010-1.08l3.182-3.106a.75.75 0 011.066.026z" />
-          </svg>
-          退出登录
-        </button>
-      </div>
+
+        <div className="flex items-center gap-3">
+          {/* 系统状态指示 */}
+          <div className="flex items-center gap-2 rounded-full border border-forge-green/20 bg-forge-green/5 px-3 py-1">
+            <span className="forge-dot-pulse relative h-2 w-2 rounded-full bg-forge-green text-forge-green" />
+            <span className="text-xs font-medium text-forge-green">系统运行中</span>
+          </div>
+
+          {/* 退出登录 */}
+          <button
+            onClick={handleLogout}
+            className="forge-btn-secondary text-sm"
+          >
+            <Icon path={ICON_PATHS.logout} />
+            退出登录
+          </button>
+        </div>
+      </header>
 
       {/* 主体：左侧 Tab + 右侧内容 */}
       <div className="flex flex-col gap-5 md:flex-row">
         {/* 左侧 Tab 导航 */}
-        <nav className="forge-card flex shrink-0 flex-row gap-1 p-2 md:w-48 md:flex-col">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex flex-1 items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition-colors md:flex-none ${
-                activeTab === tab.key
-                  ? 'bg-forge-accent/15 text-forge-accent'
-                  : 'text-forge-muted hover:bg-forge-bg hover:text-forge-ink'
-              }`}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
-          ))}
+        <nav className="forge-card-pro shrink-0 p-3 md:w-56 md:self-start">
+          <div className="flex flex-row gap-1 md:flex-col">
+            {(() => {
+              let lastSection = '';
+              return TABS.map((tab) => {
+                const showHeader = tab.section !== lastSection;
+                lastSection = tab.section;
+                const isActive = activeTab === tab.key;
+                return (
+                  <Fragment key={tab.key}>
+                    {showHeader && (
+                      <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-forge-muted/70 first:pt-0">
+                        {tab.section}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setActiveTab(tab.key)}
+                      className={`forge-nav-item flex-1 md:flex-none ${
+                        isActive ? 'forge-nav-item-active' : 'forge-nav-item-inactive'
+                      }`}
+                    >
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors ${
+                          isActive
+                            ? 'bg-forge-accent/20 text-forge-accent'
+                            : 'bg-forge-bg text-forge-muted'
+                        }`}
+                      >
+                        {tab.icon}
+                      </span>
+                      <span>{tab.label}</span>
+                    </button>
+                  </Fragment>
+                );
+              });
+            })()}
+          </div>
+
+          {/* 侧边栏底部信息 */}
+          <div className="mt-3 hidden border-t border-forge-border pt-3 md:block">
+            <div className="rounded-lg bg-forge-bg/60 px-3 py-2.5">
+              <p className="text-xs font-medium text-forge-ink">Agent Forge</p>
+              <p className="mt-0.5 text-[11px] text-forge-muted">v1.0 · 管理员模式</p>
+            </div>
+          </div>
         </nav>
 
         {/* 右侧内容区 */}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 forge-animate-fade-in">
           {activeTab === 'dashboard' && <DashboardTab />}
           {activeTab === 'projects' && <ProjectsTab />}
           {activeTab === 'settings' && <SettingsTab />}
@@ -387,10 +472,38 @@ function DashboardTab() {
   if (!stats) return null;
 
   const cards = [
-    { label: '总用户数', value: stats.totalUsers, color: 'text-forge-accent' },
-    { label: '总项目数', value: stats.totalProjects, color: 'text-forge-green' },
-    { label: '总任务数', value: stats.totalTasks, color: 'text-forge-yellow' },
-    { label: '治理报告数', value: stats.totalGovernanceReports, color: 'text-forge-purple' },
+    {
+      label: '总用户数',
+      value: stats.totalUsers,
+      color: 'text-forge-accent',
+      border: 'border-l-forge-accent',
+      iconBg: 'bg-forge-accent/15',
+      icon: <Icon path={ICON_PATHS.people} className="h-5 w-5" />,
+    },
+    {
+      label: '总项目数',
+      value: stats.totalProjects,
+      color: 'text-forge-green',
+      border: 'border-l-forge-green',
+      iconBg: 'bg-forge-green/15',
+      icon: <Icon path={ICON_PATHS.folder} className="h-5 w-5" />,
+    },
+    {
+      label: '总任务数',
+      value: stats.totalTasks,
+      color: 'text-forge-yellow',
+      border: 'border-l-forge-yellow',
+      iconBg: 'bg-forge-yellow/15',
+      icon: <Icon path={ICON_PATHS.checklist} className="h-5 w-5" />,
+    },
+    {
+      label: '治理报告数',
+      value: stats.totalGovernanceReports,
+      color: 'text-forge-purple',
+      border: 'border-l-forge-purple',
+      iconBg: 'bg-forge-purple/15',
+      icon: <Icon path={ICON_PATHS.report} className="h-5 w-5" />,
+    },
   ];
 
   const totalForChart = STATUS_ORDER.reduce(
@@ -401,24 +514,46 @@ function DashboardTab() {
   return (
     <div className="space-y-5">
       {/* 统计卡片 */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {cards.map((c) => (
-          <div key={c.label} className="forge-card p-5">
-            <p className="text-sm text-forge-muted">{c.label}</p>
-            <p className={`mt-2 text-3xl font-semibold ${c.color}`}>{c.value}</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map((c, i) => (
+          <div
+            key={c.label}
+            className={`forge-card-pro forge-hover-lift relative overflow-hidden border-l-4 ${c.border} p-5`}
+            style={{ animationDelay: `${i * 60}ms` }}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-forge-muted">{c.label}</p>
+                <p className={`mt-2 text-3xl font-bold tabular-nums ${c.color} forge-animate-count`}>
+                  {c.value}
+                </p>
+              </div>
+              <span
+                className={`flex h-11 w-11 items-center justify-center rounded-xl ${c.iconBg} ${c.color}`}
+              >
+                {c.icon}
+              </span>
+            </div>
           </div>
         ))}
       </div>
 
       {/* 项目状态分布 */}
-      <div className="forge-card p-5">
-        <h2 className="mb-4 text-base font-semibold text-forge-ink">项目状态分布</h2>
+      <div className="forge-card-pro p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Icon path={ICON_PATHS.checklist} className="h-4 w-4 text-forge-accent" />
+            <h2 className="text-base font-semibold text-forge-ink">项目状态分布</h2>
+          </div>
+          <span className="text-xs text-forge-muted">共 {totalForChart} 个项目</span>
+        </div>
+
         {totalForChart === 0 ? (
-          <p className="py-6 text-center text-sm text-forge-muted">暂无项目数据</p>
+          <EmptyHint text="暂无项目数据" />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {/* 条形图 */}
-            <div className="flex h-3 w-full overflow-hidden rounded-full bg-forge-bg">
+            <div className="flex h-3 w-full overflow-hidden rounded-full bg-forge-bg ring-1 ring-inset ring-forge-border">
               {STATUS_ORDER.map((s) => {
                 const count = stats.projectsByStatus[s] || 0;
                 if (count === 0) return null;
@@ -427,31 +562,45 @@ function DashboardTab() {
                 return (
                   <div
                     key={s}
-                    className={`${meta.bar} h-full transition-all`}
+                    className={`${meta.bar} h-full transition-all duration-500`}
                     style={{ width: `${pct}%` }}
                     title={`${meta.label}: ${count}`}
                   />
                 );
               })}
             </div>
-            {/* 图例 + 数值 */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+
+            {/* 图例 + 迷你进度条 */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {STATUS_ORDER.map((s) => {
                 const count = stats.projectsByStatus[s] || 0;
                 const meta = getStatusMeta(s);
                 const pct = totalForChart > 0 ? Math.round((count / totalForChart) * 100) : 0;
                 return (
-                  <div key={s} className="rounded-md border border-forge-border bg-forge-bg px-3 py-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`h-2.5 w-2.5 rounded-sm ${meta.bar}`} />
-                      <span className="text-xs text-forge-muted">{meta.label}</span>
+                  <div
+                    key={s}
+                    className="rounded-lg border border-forge-border bg-forge-bg/50 p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} />
+                        <span className="text-sm text-forge-ink">{meta.label}</span>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-forge-ink">
+                        {count}
+                      </span>
                     </div>
-                    <p className={`mt-1 text-lg font-semibold ${meta.color}`}>
-                      {count}
-                      <span className="ml-1 text-xs font-normal text-forge-muted">
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="forge-progress flex-1">
+                        <div
+                          className={`forge-progress-bar ${meta.bar}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="w-9 text-right text-xs tabular-nums text-forge-muted">
                         {pct}%
                       </span>
-                    </p>
+                    </div>
                   </div>
                 );
               })}
@@ -461,29 +610,40 @@ function DashboardTab() {
       </div>
 
       {/* 最近项目 */}
-      <div className="forge-card p-5">
-        <h2 className="mb-4 text-base font-semibold text-forge-ink">最近 5 个项目</h2>
+      <div className="forge-card-pro overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-forge-border px-5 py-4">
+          <Icon path={ICON_PATHS.folder} className="h-4 w-4 text-forge-accent" />
+          <h2 className="text-base font-semibold text-forge-ink">最近 5 个项目</h2>
+        </div>
         {stats.recentProjects.length === 0 ? (
-          <p className="py-6 text-center text-sm text-forge-muted">暂无项目</p>
+          <div className="px-5 py-10">
+            <EmptyHint text="暂无项目" />
+          </div>
         ) : (
-          <div className="space-y-2">
+          <div>
             {stats.recentProjects.map((p) => {
               const meta = getStatusMeta(p.status);
               return (
                 <div
                   key={p.id}
-                  className="flex items-center justify-between rounded-md border border-forge-border bg-forge-bg px-4 py-3"
+                  className="forge-table-row flex items-center justify-between gap-3 px-5 py-3.5"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-forge-ink">{p.name}</p>
-                    <p className="mt-0.5 text-xs text-forge-muted">
-                      {p.user.username} · {PROJECT_TYPE_LABEL[p.projectType] || p.projectType} ·{' '}
-                      {formatDate(p.createdAt)}
-                    </p>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.bg} ${meta.color}`}
+                    >
+                      <Icon path={ICON_PATHS.folder} className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-forge-ink">{p.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-forge-muted">
+                        {p.user.username} · {PROJECT_TYPE_LABEL[p.projectType] || p.projectType} ·{' '}
+                        {formatDate(p.createdAt)}
+                      </p>
+                    </div>
                   </div>
-                  <span
-                    className={`ml-3 shrink-0 rounded-full border border-forge-border px-2.5 py-0.5 text-xs font-medium ${meta.color}`}
-                  >
+                  <span className={`forge-badge shrink-0 ${meta.bg} ${meta.color} ${meta.ring}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
                     {meta.label}
                   </span>
                 </div>
@@ -555,9 +715,12 @@ function ProjectsTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-forge-ink">项目管理</h2>
+        <div className="flex items-center gap-2">
+          <Icon path={ICON_PATHS.projects} className="h-4 w-4 text-forge-accent" />
+          <h2 className="text-base font-semibold text-forge-ink">项目管理</h2>
+        </div>
         {pagination && (
-          <span className="text-sm text-forge-muted">
+          <span className="rounded-full border border-forge-border bg-forge-surface px-3 py-1 text-xs text-forge-muted">
             共 {pagination.total} 个项目
           </span>
         )}
@@ -568,14 +731,15 @@ function ProjectsTab() {
       ) : error ? (
         <ErrorBlock message={error} />
       ) : projects.length === 0 ? (
-        <div className="forge-card py-12 text-center text-sm text-forge-muted">
-          暂无项目
+        <div className="forge-card-pro py-14">
+          <EmptyHint text="暂无项目" />
         </div>
       ) : (
         <>
-          {/* 表头 */}
-          <div className="forge-card overflow-hidden">
-            <div className="flex items-center gap-3 border-b border-forge-border bg-forge-bg px-4 py-2.5 text-xs font-medium text-forge-muted">
+          {/* 数据表格 */}
+          <div className="forge-card-pro overflow-hidden">
+            {/* 表头 */}
+            <div className="flex items-center gap-3 border-b border-forge-border bg-forge-bg/60 px-4 py-3 text-xs font-medium text-forge-muted">
               <div className="min-w-0 flex-1">项目名</div>
               <div className="w-24 shrink-0">用户</div>
               <div className="w-16 shrink-0">类型</div>
@@ -589,7 +753,7 @@ function ProjectsTab() {
               return (
                 <div
                   key={p.id}
-                  className="flex items-center gap-3 border-b border-forge-border px-4 py-3 text-sm last:border-b-0 hover:bg-forge-bg/50"
+                  className="forge-table-row flex items-center gap-3 px-4 py-3 text-sm"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-forge-ink">{p.name}</p>
@@ -598,9 +762,10 @@ function ProjectsTab() {
                         href={p.repoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block truncate text-xs text-forge-accent hover:underline"
+                        className="mt-0.5 flex items-center gap-1 truncate text-xs text-forge-accent hover:underline"
                       >
-                        {p.repoUrl}
+                        <Icon path={ICON_PATHS.link} className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{p.repoUrl}</span>
                       </a>
                     )}
                   </div>
@@ -611,9 +776,8 @@ function ProjectsTab() {
                     {PROJECT_TYPE_LABEL[p.projectType] || p.projectType}
                   </div>
                   <div className="w-20 shrink-0">
-                    <span
-                      className={`inline-block rounded-full border border-forge-border px-2 py-0.5 text-xs font-medium ${meta.color}`}
-                    >
+                    <span className={`forge-badge ${meta.bg} ${meta.color} ${meta.ring}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
                       {meta.label}
                     </span>
                   </div>
@@ -624,12 +788,15 @@ function ProjectsTab() {
                     <button
                       onClick={() => handleDelete(p)}
                       disabled={deletingId === p.id}
-                      className="inline-flex items-center justify-center rounded-md border border-forge-red/30 px-2 py-1 text-xs text-forge-red transition-colors hover:bg-forge-red/10 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 rounded-md border border-forge-border px-2.5 py-1 text-xs text-forge-muted transition-colors hover:border-forge-red/40 hover:bg-forge-red/10 hover:text-forge-red disabled:opacity-50"
                     >
                       {deletingId === p.id ? (
                         <span className="h-3 w-3 animate-forge-spin rounded-full border border-forge-red/40 border-t-forge-red" />
                       ) : (
-                        '删除'
+                        <>
+                          <Icon path={ICON_PATHS.trash} className="h-3 w-3" />
+                          删除
+                        </>
                       )}
                     </button>
                   </div>
@@ -648,7 +815,7 @@ function ProjectsTab() {
               >
                 上一页
               </button>
-              <span className="text-sm text-forge-muted">
+              <span className="rounded-lg border border-forge-border bg-forge-surface px-3 py-1.5 text-sm tabular-nums text-forge-muted">
                 第 {pagination.page} / {pagination.totalPages} 页
               </span>
               <button
@@ -779,101 +946,111 @@ function SettingsTab() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold text-forge-ink">系统配置</h2>
+      <div className="flex items-center gap-2">
+        <Icon path={ICON_PATHS.settings} className="h-4 w-4 text-forge-accent" />
+        <h2 className="text-base font-semibold text-forge-ink">系统配置</h2>
+      </div>
 
       {error && (
-        <div className="rounded-md border border-forge-red/30 bg-forge-red/10 px-3 py-2 text-sm text-forge-red">
-          {error}
+        <div className="flex items-start gap-2 rounded-lg border border-forge-red/30 bg-forge-red/10 px-3 py-2.5 text-sm text-forge-red forge-animate-fade-in">
+          <Icon path={ICON_PATHS.error} className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
       {savedMessage && (
-        <div className="rounded-md border border-forge-green/30 bg-forge-green/10 px-3 py-2 text-sm text-forge-green">
-          {savedMessage}
+        <div className="flex items-center gap-2 rounded-lg border border-forge-green/30 bg-forge-green/10 px-3 py-2.5 text-sm text-forge-green forge-animate-fade-in">
+          <svg className="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+          </svg>
+          <span>{savedMessage}</span>
         </div>
       )}
 
-      <form onSubmit={handleSave} className="forge-card space-y-5 p-5">
-        {/* GitHub Client ID */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-forge-ink">
-            GitHub Client ID
-          </label>
-          <input
-            type="text"
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            placeholder={maskedSettings.GITHUB_CLIENT_ID || '未配置'}
-            className="forge-input w-full font-mono text-sm"
-          />
-          <p className="mt-1 text-xs text-forge-muted">GitHub OAuth App 的 Client ID</p>
+      <form onSubmit={handleSave} className="forge-card-pro space-y-6 p-5 sm:p-6">
+        {/* 分区：GitHub OAuth */}
+        <SectionDivider label="GitHub OAuth 应用" />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* GitHub Client ID */}
+          <FieldShell
+            label="GitHub Client ID"
+            hint="GitHub OAuth App 的 Client ID"
+          >
+            <input
+              type="text"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              placeholder={maskedSettings.GITHUB_CLIENT_ID || '未配置'}
+              className="forge-input w-full font-mono text-sm"
+            />
+          </FieldShell>
+
+          {/* GitHub Client Secret */}
+          <FieldShell
+            label="GitHub Client Secret"
+            hint="留空表示不修改"
+          >
+            <input
+              type="password"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              placeholder={
+                maskedSettings.GITHUB_CLIENT_SECRET
+                  ? `当前: ${maskedSettings.GITHUB_CLIENT_SECRET}（留空保持不变）`
+                  : '未配置'
+              }
+              className="forge-input w-full font-mono text-sm"
+              autoComplete="new-password"
+            />
+          </FieldShell>
         </div>
 
-        {/* GitHub Client Secret */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-forge-ink">
-            GitHub Client Secret
-          </label>
-          <input
-            type="password"
-            value={clientSecret}
-            onChange={(e) => setClientSecret(e.target.value)}
-            placeholder={
-              maskedSettings.GITHUB_CLIENT_SECRET
-                ? `当前: ${maskedSettings.GITHUB_CLIENT_SECRET}（留空保持不变）`
-                : '未配置'
-            }
-            className="forge-input w-full font-mono text-sm"
-            autoComplete="new-password"
-          />
-          <p className="mt-1 text-xs text-forge-muted">
-            GitHub OAuth App 的 Client Secret，留空表示不修改
-          </p>
+        {/* 分区：GitHub 认证 */}
+        <SectionDivider label="GitHub 认证与仓库归属" />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* GitHub Token */}
+          <FieldShell
+            label="GitHub Token"
+            hint="系统级 Personal Access Token，留空表示不修改"
+          >
+            <input
+              type="password"
+              value={githubToken}
+              onChange={(e) => setGithubToken(e.target.value)}
+              placeholder={
+                maskedSettings.GITHUB_TOKEN
+                  ? `当前: ${maskedSettings.GITHUB_TOKEN}（留空保持不变）`
+                  : '未配置'
+              }
+              className="forge-input w-full font-mono text-sm"
+              autoComplete="new-password"
+            />
+          </FieldShell>
+
+          {/* GitHub Org */}
+          <FieldShell
+            label="GitHub Org（可选）"
+            hint="不填则在登录用户账号下创建仓库"
+          >
+            <input
+              type="text"
+              value={githubOrg}
+              onChange={(e) => setGithubOrg(e.target.value)}
+              placeholder={maskedSettings.GITHUB_ORG || '留空则在用户账号下创建'}
+              className="forge-input w-full font-mono text-sm"
+            />
+          </FieldShell>
         </div>
 
-        {/* GitHub Token */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-forge-ink">
-            GitHub Token
-          </label>
-          <input
-            type="password"
-            value={githubToken}
-            onChange={(e) => setGithubToken(e.target.value)}
-            placeholder={
-              maskedSettings.GITHUB_TOKEN
-                ? `当前: ${maskedSettings.GITHUB_TOKEN}（留空保持不变）`
-                : '未配置'
-            }
-            className="forge-input w-full font-mono text-sm"
-            autoComplete="new-password"
-          />
-          <p className="mt-1 text-xs text-forge-muted">
-            系统级 GitHub Personal Access Token，留空表示不修改
-          </p>
-        </div>
-
-        {/* GitHub Org */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-forge-ink">
-            GitHub Org <span className="text-forge-muted">（可选）</span>
-          </label>
-          <input
-            type="text"
-            value={githubOrg}
-            onChange={(e) => setGithubOrg(e.target.value)}
-            placeholder={maskedSettings.GITHUB_ORG || '留空则在用户账号下创建'}
-            className="forge-input w-full font-mono text-sm"
-          />
-          <p className="mt-1 text-xs text-forge-muted">
-            仓库创建的目标组织名，不填则在登录用户账号下创建
-          </p>
-        </div>
+        {/* 分区：应用配置 */}
+        <SectionDivider label="应用配置" />
 
         {/* App URL */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-forge-ink">
-            App URL
-          </label>
+        <FieldShell
+          label="App URL"
+          hint="应用访问地址，用于构建 OAuth 回调与 Webhook 地址"
+        >
           <input
             type="text"
             value={appUrl}
@@ -881,22 +1058,17 @@ function SettingsTab() {
             placeholder={maskedSettings.APP_URL || 'https://your-app.vercel.app'}
             className="forge-input w-full font-mono text-sm"
           />
-          <p className="mt-1 text-xs text-forge-muted">
-            应用访问地址，用于构建 OAuth 回调与 Webhook 地址
-          </p>
-        </div>
+        </FieldShell>
 
-        {/* Forge 仓库配置 */}
-        <div className="rounded-lg border border-forge-border bg-forge-surface/50 p-4">
-          <h4 className="mb-3 text-sm font-semibold text-forge-ink">
-            Agent Forge 仓库配置
-          </h4>
+        {/* 分区：仓库配置 */}
+        <SectionDivider label="Agent Forge 仓库配置" />
+
+        <div className="rounded-xl border border-forge-border bg-forge-bg/40 p-4">
           <p className="mb-3 text-xs text-forge-muted">
             存放 GitHub Actions 工作流文件的仓库（即本仓库），所有 workflow 在此仓库上触发
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs text-forge-muted">仓库 Owner</label>
+            <FieldShell label="仓库 Owner" compact>
               <input
                 type="text"
                 value={forgeRepoOwner}
@@ -904,9 +1076,8 @@ function SettingsTab() {
                 placeholder={maskedSettings.FORGE_REPO_OWNER || '如: wang361999'}
                 className="forge-input w-full font-mono text-sm"
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-forge-muted">仓库名</label>
+            </FieldShell>
+            <FieldShell label="仓库名" compact>
               <input
                 type="text"
                 value={forgeRepoName}
@@ -914,17 +1085,13 @@ function SettingsTab() {
                 placeholder={maskedSettings.FORGE_REPO_NAME || '如: gitd'}
                 className="forge-input w-full font-mono text-sm"
               />
-            </div>
+            </FieldShell>
           </div>
         </div>
 
         {/* 保存按钮 */}
-        <div className="flex items-center gap-3 border-t border-forge-border pt-4">
-          <button
-            type="submit"
-            disabled={saving}
-            className="forge-btn-primary text-sm"
-          >
+        <div className="flex flex-col items-start gap-3 border-t border-forge-border pt-5 sm:flex-row sm:items-center">
+          <button type="submit" disabled={saving} className="forge-btn-primary text-sm">
             {saving ? (
               <>
                 <span className="h-4 w-4 animate-forge-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -940,17 +1107,12 @@ function SettingsTab() {
         </div>
       </form>
 
-      {/* GitHub 仓库 Secrets 提示区域 */}
-      <div className="forge-card border-forge-yellow/30 p-5">
+      {/* GitHub 仓库 Secrets 提示区域（更醒目） */}
+      <div className="forge-card-pro forge-top-bar relative overflow-hidden border-forge-yellow/40 p-5">
         <div className="flex items-start gap-3">
-          <svg
-            className="mt-0.5 h-5 w-5 shrink-0 text-forge-yellow"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0114.082 15H1.918a1.75 1.75 0 01-1.543-2.575L6.457 1.047zM8 5a.75.75 0 01.75.75v2.5a.75.75 0 01-1.5 0v-2.5A.75.75 0 018 5zm1 6a1 1 0 11-2 0 1 1 0 012 0z" />
-          </svg>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-forge-yellow/15 text-forge-yellow">
+            <Icon path={ICON_PATHS.alert} className="h-5 w-5" />
+          </span>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-forge-ink">
               需要在 GitHub 仓库 Secrets 中配置的项
@@ -959,28 +1121,23 @@ function SettingsTab() {
               以下密钥需要在 GitHub 仓库的 Settings → Secrets and variables → Actions 中手动配置，
               供 GitHub Actions 工作流使用：
             </p>
-            <ul className="mt-2 space-y-1.5 text-xs text-forge-muted">
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-forge-yellow">•</span>
-                <code className="rounded bg-forge-bg px-1.5 py-0.5 font-mono text-forge-accent">
-                  PAT_TOKEN
-                </code>
-                <span>— 值同上方 GitHub Token</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-forge-yellow">•</span>
-                <code className="rounded bg-forge-bg px-1.5 py-0.5 font-mono text-forge-accent">
-                  GITHUB_TOKEN
-                </code>
-                <span>— 值同上方 GitHub Token</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-forge-yellow">•</span>
-                <code className="rounded bg-forge-bg px-1.5 py-0.5 font-mono text-forge-accent">
-                  WEBHOOK_SECRET
-                </code>
-                <span>— Webhook 验证密钥（初始化时已生成）</span>
-              </li>
+            <ul className="mt-3 space-y-2">
+              {[
+                { name: 'PAT_TOKEN', desc: '值同上方 GitHub Token' },
+                { name: 'GITHUB_TOKEN', desc: '值同上方 GitHub Token' },
+                { name: 'WEBHOOK_SECRET', desc: 'Webhook 验证密钥（初始化时已生成）' },
+              ].map((item) => (
+                <li
+                  key={item.name}
+                  className="flex items-center gap-2 rounded-lg border border-forge-border bg-forge-bg/60 px-3 py-2"
+                >
+                  <Icon path={ICON_PATHS.link} className="h-3.5 w-3.5 shrink-0 text-forge-yellow" />
+                  <code className="rounded bg-forge-bg px-1.5 py-0.5 font-mono text-xs text-forge-accent">
+                    {item.name}
+                  </code>
+                  <span className="text-xs text-forge-muted">— {item.desc}</span>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
@@ -1031,18 +1188,23 @@ function UsersTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-forge-ink">用户管理</h2>
-        <span className="text-sm text-forge-muted">共 {users.length} 个用户</span>
+        <div className="flex items-center gap-2">
+          <Icon path={ICON_PATHS.users} className="h-4 w-4 text-forge-accent" />
+          <h2 className="text-base font-semibold text-forge-ink">用户管理</h2>
+        </div>
+        <span className="rounded-full border border-forge-border bg-forge-surface px-3 py-1 text-xs text-forge-muted">
+          共 {users.length} 个用户
+        </span>
       </div>
 
       {users.length === 0 ? (
-        <div className="forge-card py-12 text-center text-sm text-forge-muted">
-          暂无用户
+        <div className="forge-card-pro py-16">
+          <EmptyHint text="暂无用户" icon={<Icon path={ICON_PATHS.users} className="h-6 w-6" />} />
         </div>
       ) : (
-        <div className="forge-card overflow-hidden">
+        <div className="forge-card-pro overflow-hidden">
           {/* 表头 */}
-          <div className="flex items-center gap-3 border-b border-forge-border bg-forge-bg px-4 py-2.5 text-xs font-medium text-forge-muted">
+          <div className="flex items-center gap-3 border-b border-forge-border bg-forge-bg/60 px-4 py-3 text-xs font-medium text-forge-muted">
             <div className="min-w-0 flex-1">用户名</div>
             <div className="w-28 shrink-0">GitHub ID</div>
             <div className="min-w-0 flex-1">邮箱</div>
@@ -1053,18 +1215,18 @@ function UsersTab() {
           {users.map((u) => (
             <div
               key={u.id}
-              className="flex items-center gap-3 border-b border-forge-border px-4 py-3 text-sm last:border-b-0 hover:bg-forge-bg/50"
+              className="forge-table-row flex items-center gap-3 px-4 py-3 text-sm"
             >
-              <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 {u.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={u.avatarUrl}
                     alt={u.username}
-                    className="h-6 w-6 shrink-0 rounded-full border border-forge-border"
+                    className="h-7 w-7 shrink-0 rounded-full ring-2 ring-forge-border ring-offset-2 ring-offset-forge-surface"
                   />
                 ) : (
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-forge-accent text-xs font-medium text-white">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-forge-accent to-forge-purple text-xs font-medium text-white ring-2 ring-forge-border ring-offset-2 ring-offset-forge-surface">
                     {u.username.charAt(0).toUpperCase()}
                   </span>
                 )}
@@ -1076,8 +1238,10 @@ function UsersTab() {
               <div className="min-w-0 flex-1 truncate text-forge-muted">
                 {u.email || <span className="text-forge-muted/60">未公开</span>}
               </div>
-              <div className="w-16 shrink-0 text-right text-forge-accent">
-                {u._count.projects}
+              <div className="w-16 shrink-0 text-right">
+                <span className="rounded-md bg-forge-accent/10 px-2 py-0.5 text-xs font-medium tabular-nums text-forge-accent">
+                  {u._count.projects}
+                </span>
               </div>
               <div className="w-36 shrink-0 text-xs text-forge-muted">
                 {formatDate(u.createdAt)}
@@ -1096,7 +1260,7 @@ function UsersTab() {
 
 function LoadingSpinner({ text }: { text: string }) {
   return (
-    <div className="forge-card flex items-center justify-center gap-3 py-12">
+    <div className="forge-card-pro flex items-center justify-center gap-3 py-14">
       <span className="h-5 w-5 animate-forge-spin rounded-full border-2 border-forge-border border-t-forge-accent" />
       <span className="text-sm text-forge-muted">{text}</span>
     </div>
@@ -1105,16 +1269,59 @@ function LoadingSpinner({ text }: { text: string }) {
 
 function ErrorBlock({ message }: { message: string }) {
   return (
-    <div className="forge-card flex items-center gap-3 border-forge-red/30 px-4 py-6">
-      <svg
-        className="h-5 w-5 shrink-0 text-forge-red"
-        viewBox="0 0 16 16"
-        fill="currentColor"
-        aria-hidden="true"
-      >
-        <path d="M2.34 3.34a8 8 0 11.32.32A8 8 0 012.34 3.34zM8 0a8 8 0 100 16A8 8 0 008 0zm.75 4.75a.75.75 0 00-1.5 0V8a.75.75 0 001.5 0V4.75zM8 12a1 1 0 100-2 1 1 0 000 2z" />
-      </svg>
+    <div className="forge-card-pro flex items-center gap-3 border-forge-red/30 px-4 py-6">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-forge-red/10 text-forge-red">
+        <Icon path={ICON_PATHS.error} className="h-5 w-5" />
+      </span>
       <span className="text-sm text-forge-red">{message}</span>
+    </div>
+  );
+}
+
+function EmptyHint({ text, icon }: { text: string; icon?: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-forge-bg text-forge-muted">
+        {icon || <Icon path={ICON_PATHS.inbox} className="h-6 w-6" />}
+      </span>
+      <p className="text-sm text-forge-muted">{text}</p>
+    </div>
+  );
+}
+
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 first:pt-0">
+      <span className="text-xs font-semibold uppercase tracking-wider text-forge-accent">
+        {label}
+      </span>
+      <span className="h-px flex-1 bg-forge-border" />
+    </div>
+  );
+}
+
+function FieldShell({
+  label,
+  hint,
+  compact,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  compact?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label
+        className={`block font-medium text-forge-ink ${
+          compact ? 'mb-1 text-xs text-forge-muted' : 'mb-1.5 text-sm'
+        }`}
+      >
+        {label}
+      </label>
+      {children}
+      {hint && <p className="mt-1 text-xs text-forge-muted">{hint}</p>}
     </div>
   );
 }

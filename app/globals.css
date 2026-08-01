@@ -4,13 +4,15 @@
 
 /* ============================================
    Agent Forge - 全局样式
-   GitHub 深色主题
+   专业级深色科技主题
    ============================================ */
 
 :root {
   --forge-bg: #0d1117;
   --forge-surface: #161b22;
+  --forge-surface2: #1c2330;
   --forge-border: #30363d;
+  --forge-border-light: #3d444d;
   --forge-ink: #e6edf3;
   --forge-muted: #8b949e;
   --forge-accent: #58a6ff;
@@ -18,6 +20,11 @@
   --forge-yellow: #d29922;
   --forge-red: #f85149;
   --forge-purple: #bc8cff;
+  --forge-glow-accent: rgba(88, 166, 255, 0.15);
+  --forge-glow-green: rgba(63, 185, 80, 0.15);
+  --forge-glow-purple: rgba(188, 140, 255, 0.15);
+  --forge-glow-red: rgba(248, 81, 73, 0.15);
+  --forge-glow-yellow: rgba(210, 153, 34, 0.15);
 }
 
 * {
@@ -45,28 +52,26 @@ a {
    自定义滚动条
    ============================================ */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--forge-bg);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--forge-border);
-  border-radius: 6px;
-  border: 2px solid var(--forge-bg);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: var(--forge-border-light);
 }
 
-/* Firefox 滚动条 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--forge-border) var(--forge-bg);
+  scrollbar-color: var(--forge-border) transparent;
 }
 
 /* ============================================
@@ -78,32 +83,216 @@ a {
 }
 
 /* ============================================
-   通用工具类
+   通用组件类
    ============================================ */
 @layer components {
+  /* 基础卡片 */
   .forge-card {
-    @apply bg-forge-surface border border-forge-border rounded-lg;
+    @apply bg-forge-surface border border-forge-border rounded-xl;
   }
 
+  /* 精致卡片 — 带悬浮投影 */
+  .forge-card-pro {
+    @apply bg-forge-surface border border-forge-border rounded-xl;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .forge-card-pro:hover {
+    border-color: var(--forge-border-light);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  /* 渐变卡片 — 带顶部光带 */
+  .forge-card-glow {
+    @apply bg-forge-surface border border-forge-border rounded-xl;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .forge-card-glow::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--forge-accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .forge-card-glow:hover::before {
+    opacity: 1;
+  }
+
+  /* 按钮 */
   .forge-btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .forge-btn-primary {
-    @apply forge-btn bg-forge-green text-white hover:brightness-110;
+    @apply forge-btn bg-forge-green text-white;
+    box-shadow: 0 1px 2px rgba(63, 185, 80, 0.2);
+  }
+
+  .forge-btn-primary:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 2px 8px rgba(63, 185, 80, 0.3);
   }
 
   .forge-btn-secondary {
-    @apply forge-btn bg-forge-surface border border-forge-border text-forge-ink hover:border-forge-muted;
+    @apply forge-btn bg-forge-surface border border-forge-border text-forge-ink;
+  }
+
+  .forge-btn-secondary:hover {
+    border-color: var(--forge-border-light);
+    background: var(--forge-surface2);
   }
 
   .forge-btn-accent {
-    @apply forge-btn bg-forge-accent text-white hover:brightness-110;
+    @apply forge-btn bg-forge-accent text-white;
+    box-shadow: 0 1px 2px rgba(88, 166, 255, 0.2);
   }
 
-  .forge-input {
-    @apply bg-forge-bg border border-forge-border rounded-md px-3 py-2 text-forge-ink placeholder-forge-muted focus:outline-none focus:border-forge-accent focus:ring-1 focus:ring-forge-accent transition-colors;
+  .forge-btn-accent:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 2px 8px rgba(88, 166, 255, 0.3);
   }
+
+  /* 输入框 */
+  .forge-input {
+    @apply bg-forge-bg border border-forge-border rounded-lg px-3 py-2 text-forge-ink placeholder-forge-muted focus:outline-none focus:border-forge-accent focus:ring-2 focus:ring-forge-accent/20 transition-all;
+  }
+
+  /* 标签徽章 */
+  .forge-badge {
+    @apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium border;
+  }
+
+  /* 数据表格行 */
+  .forge-table-row {
+    @apply border-b border-forge-border transition-colors duration-150;
+  }
+
+  .forge-table-row:hover {
+    background-color: var(--forge-surface2);
+  }
+
+  .forge-table-row:last-child {
+    @apply border-b-0;
+  }
+
+  /* 侧边栏导航项 */
+  .forge-nav-item {
+    @apply flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200;
+  }
+
+  .forge-nav-item-active {
+    background-color: var(--forge-glow-accent);
+    color: var(--forge-accent);
+  }
+
+  .forge-nav-item-inactive {
+    color: var(--forge-muted);
+  }
+
+  .forge-nav-item-inactive:hover {
+    background-color: var(--forge-bg);
+    color: var(--forge-ink);
+  }
+}
+
+/* ============================================
+   渐变与光效工具类
+   ============================================ */
+
+/* 渐变文字 */
+.forge-text-gradient {
+  background: linear-gradient(135deg, var(--forge-accent), var(--forge-purple));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.forge-text-gradient-green {
+  background: linear-gradient(135deg, var(--forge-green), var(--forge-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 光晕背景 */
+.forge-glow-bg {
+  position: relative;
+}
+
+.forge-glow-bg::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--forge-glow-accent), transparent 50%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* 顶部渐变条 */
+.forge-top-bar {
+  position: relative;
+  overflow: hidden;
+}
+
+.forge-top-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--forge-accent), var(--forge-purple), var(--forge-green));
+}
+
+/* 状态点动画 */
+.forge-dot-pulse {
+  position: relative;
+}
+
+.forge-dot-pulse::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.4;
+  animation: forge-ring-pulse 1.8s ease-out infinite;
+}
+
+@keyframes forge-ring-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.5);
+    opacity: 0;
+  }
+}
+
+/* 迷你进度条 */
+.forge-progress {
+  @apply h-1 rounded-full bg-forge-bg overflow-hidden;
+}
+
+.forge-progress-bar {
+  @apply h-full rounded-full transition-all duration-500;
 }
 
 /* ============================================
@@ -151,11 +340,118 @@ a {
   animation: forge-fade-in 0.3s ease-out;
 }
 
+@keyframes forge-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.forge-animate-fade-in-up {
+  animation: forge-fade-in-up 0.4s ease-out;
+}
+
+@keyframes forge-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.forge-animate-slide-in {
+  animation: forge-slide-in 0.3s ease-out;
+}
+
+@keyframes forge-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.forge-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--forge-surface) 25%,
+    var(--forge-surface2) 50%,
+    var(--forge-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: forge-shimmer 1.5s infinite;
+}
+
+/* 数字翻滚动画 */
+@keyframes forge-count-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.forge-animate-count {
+  animation: forge-count-up 0.5s ease-out;
+}
+
+/* ============================================
+   微交互
+   ============================================ */
+
+/* 卡片悬浮上移 */
+.forge-hover-lift {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s;
+}
+
+.forge-hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* 按钮按压 */
+.forge-btn:active {
+  transform: scale(0.97);
+}
+
+/* ============================================
+   响应式辅助
+   ============================================ */
+
+/* 隐藏滚动条但保持可滚动 */
+.forge-scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+.forge-scroll-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ============================================
+   玻璃态效果
+   ============================================ */
+.forge-glass {
+  background: rgba(22, 27, 34, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(48, 54, 61, 0.6);
+}
+
 /* ============================================================
    打印样式 — 治理报告导出 PDF 时使用
    ============================================================ */
 @media print {
-  /* 隐藏不需要打印的元素 */
   header,
   nav,
   footer,
@@ -164,13 +460,11 @@ a {
     display: none !important;
   }
 
-  /* 使用白色背景和黑色文字 */
   body {
     background: white !important;
     color: black !important;
   }
 
-  /* 卡片使用边框而非背景色 */
   .forge-card {
     background: white !important;
     border: 1px solid #ccc !important;
@@ -178,18 +472,15 @@ a {
     page-break-inside: avoid;
   }
 
-  /* 文字颜色强制为黑色 */
   .text-forge-ink,
   .text-forge-muted {
     color: black !important;
   }
 
-  /* 展开所有折叠区域 */
   .forge-card.overflow-hidden > div:last-child {
     display: block !important;
   }
 
-  /* 页面边距 */
   @page {
     margin: 1.5cm;
   }
