@@ -851,8 +851,97 @@ function SettingsTab() {
   const [forgeRepoOwner, setForgeRepoOwner] = useState('');
   const [forgeRepoName, setForgeRepoName] = useState('');
 
+  // AI Provider API Keys
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [deepseekKey, setDeepseekKey] = useState('');
+  const [anthropicKey, setAnthropicKey] = useState('');
+  const [mistralKey, setMistralKey] = useState('');
+
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState('');
+
+  // 测试状态
+  type TestState = {
+    testing: boolean;
+    success?: boolean;
+    message?: string;
+  };
+  const [testStates, setTestStates] = useState<Record<string, TestState>>({});
+  const [testAllRunning, setTestAllRunning] = useState(false);
+
+  /** 执行单个配置测试 */
+  async function runTest(type: string, provider?: string) {
+    const key = provider ? `${type}_${provider}` : type;
+    setTestStates((prev) => ({ ...prev, [key]: { testing: true } }));
+
+    try {
+      const params = new URLSearchParams({ type });
+      if (provider) params.set('provider', provider);
+      const res = await fetch(`/api/admin/test?${params.toString()}`);
+      const data = await res.json();
+
+      setTestStates((prev) => ({
+        ...prev,
+        [key]: {
+          testing: false,
+          success: data.success,
+          message: data.message || (data.results ? JSON.stringify(data.results) : '测试完成'),
+        },
+      }));
+    } catch (err) {
+      setTestStates((prev) => ({
+        ...prev,
+        [key]: {
+          testing: false,
+          success: false,
+          message: err instanceof Error ? err.message : '测试失败',
+        },
+      }));
+    }
+  }
+
+  /** 测试所有配置 */
+  async function runTestAll() {
+    setTestAllRunning(true);
+    await runTest('all');
+    setTestAllRunning(false);
+  }
+
+  /** 渲染测试按钮 + 结果 */
+  function TestButton({ type, provider, label }: { type: string; provider?: string; label?: string }) {
+    const key = provider ? `${type}_${provider}` : type;
+    const state = testStates[key];
+
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => runTest(type, provider)}
+          disabled={state?.testing}
+          className="inline-flex items-center gap-1.5 rounded-md border border-forge-accent/40 bg-forge-accent/10 px-3 py-1.5 text-xs font-medium text-forge-accent transition-colors hover:bg-forge-accent/20 disabled:opacity-50"
+        >
+          {state?.testing ? (
+            <>
+              <span className="h-3 w-3 animate-forge-spin rounded-full border border-forge-accent/30 border-t-forge-accent" />
+              测试中...
+            </>
+          ) : (
+            <>
+              <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM4.5 7.5a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75zM8 4a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 018 4z" />
+              </svg>
+              {label || '测试'}
+            </>
+          )}
+        </button>
+        {state && !state.testing && state.message && (
+          <span className={`text-xs ${state.success ? 'text-forge-green' : 'text-forge-red'}`}>
+            {state.success ? '✓ ' : '✗ '}{state.message.substring(0, 80)}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -875,6 +964,11 @@ function SettingsTab() {
         // 密钥字段留空，通过 placeholder 显示脱敏值
         setClientSecret('');
         setGithubToken('');
+        // AI Provider keys (show masked in placeholder, leave input empty)
+        setOpenaiKey('');
+        setDeepseekKey('');
+        setAnthropicKey('');
+        setMistralKey('');
       } catch (err) {
         if (mounted) setError(err instanceof Error ? err.message : '加载配置失败');
       } finally {
@@ -901,6 +995,11 @@ function SettingsTab() {
     if (appUrl.trim()) settings.APP_URL = appUrl.trim();
     if (forgeRepoOwner.trim()) settings.FORGE_REPO_OWNER = forgeRepoOwner.trim();
     if (forgeRepoName.trim()) settings.FORGE_REPO_NAME = forgeRepoName.trim();
+    // AI Provider keys
+    if (openaiKey.trim()) settings.AI_PROVIDER_OPENAI_API_KEY = openaiKey.trim();
+    if (deepseekKey.trim()) settings.AI_PROVIDER_DEEPSEEK_API_KEY = deepseekKey.trim();
+    if (anthropicKey.trim()) settings.AI_PROVIDER_ANTHROPIC_API_KEY = anthropicKey.trim();
+    if (mistralKey.trim()) settings.AI_PROVIDER_MISTRAL_API_KEY = mistralKey.trim();
 
     if (Object.keys(settings).length === 0) {
       setError('没有需要更新的配置项');
@@ -931,6 +1030,10 @@ function SettingsTab() {
         setForgeRepoName(s.FORGE_REPO_NAME || '');
         setClientSecret('');
         setGithubToken('');
+        setOpenaiKey('');
+        setDeepseekKey('');
+        setAnthropicKey('');
+        setMistralKey('');
       }
       setTimeout(() => setSavedMessage(''), 3000);
     } catch (err) {
@@ -967,8 +1070,41 @@ function SettingsTab() {
       )}
 
       <form onSubmit={handleSave} className="forge-card-pro space-y-6 p-5 sm:p-6">
+        {/* 测试全部按钮 */}
+        <div className="rounded-lg border border-forge-accent/30 bg-forge-accent/5 px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Icon path={ICON_PATHS.checklist} className="h-4 w-4 text-forge-accent" />
+              <span className="text-sm text-forge-ink">一键测试所有配置连通性</span>
+            </div>
+            <button
+              type="button"
+              onClick={runTestAll}
+              disabled={testAllRunning}
+              className="inline-flex items-center gap-1.5 rounded-md bg-forge-accent px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-forge-accent/80 disabled:opacity-50"
+            >
+              {testAllRunning ? (
+                <>
+                  <span className="h-3 w-3 animate-forge-spin rounded-full border border-white/30 border-t-white" />
+                  测试中...
+                </>
+              ) : (
+                '测试全部'
+              )}
+            </button>
+          </div>
+          {testStates['all'] && !testStates['all'].testing && testStates['all'].message && (
+            <div className={`text-xs ${testStates['all'].success ? 'text-forge-green' : 'text-forge-red'}`}>
+              {testStates['all'].success ? '✓ ' : '✗ '}{testStates['all'].message}
+            </div>
+          )}
+        </div>
+
         {/* 分区：GitHub OAuth */}
         <SectionDivider label="GitHub OAuth 应用" />
+        <div className="flex justify-end">
+          <TestButton type="github_oauth" label="测试 OAuth" />
+        </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* GitHub Client ID */}
@@ -1007,6 +1143,9 @@ function SettingsTab() {
 
         {/* 分区：GitHub 认证 */}
         <SectionDivider label="GitHub 认证与仓库归属" />
+        <div className="flex justify-end">
+          <TestButton type="github_token" label="测试 Token" />
+        </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* GitHub Token */}
@@ -1062,6 +1201,9 @@ function SettingsTab() {
 
         {/* 分区：仓库配置 */}
         <SectionDivider label="Agent Forge 仓库配置" />
+        <div className="flex justify-end">
+          <TestButton type="forge_repo" label="测试仓库连通" />
+        </div>
 
         <div className="rounded-xl border border-forge-border bg-forge-bg/40 p-4">
           <p className="mb-3 text-xs text-forge-muted">
@@ -1086,6 +1228,106 @@ function SettingsTab() {
                 className="forge-input w-full font-mono text-sm"
               />
             </FieldShell>
+          </div>
+        </div>
+
+        {/* 分区：AI Provider 配置 */}
+        <SectionDivider label="AI Provider 配置" />
+        <div className="rounded-xl border border-forge-border bg-forge-bg/40 p-4 space-y-4">
+          <p className="text-xs text-forge-muted">
+            配置各 AI 提供商的 API Key，留空表示不修改。GitHub Models 使用 GITHUB_TOKEN，无需单独配置。
+          </p>
+
+          {/* OpenAI */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <FieldShell label="OpenAI API Key" hint="支持 GPT 系列模型" compact>
+                <input
+                  type="password"
+                  value={openaiKey}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  placeholder={
+                    maskedSettings.AI_PROVIDER_OPENAI_API_KEY
+                      ? `当前: ${maskedSettings.AI_PROVIDER_OPENAI_API_KEY}（留空保持不变）`
+                      : '未配置'
+                  }
+                  className="forge-input w-full font-mono text-sm"
+                  autoComplete="new-password"
+                />
+              </FieldShell>
+            </div>
+            <div className="flex justify-end">
+              <TestButton type="ai_provider" provider="openai" label="测试 OpenAI" />
+            </div>
+          </div>
+
+          {/* DeepSeek */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <FieldShell label="DeepSeek API Key" hint="性价比高，擅长代码生成" compact>
+                <input
+                  type="password"
+                  value={deepseekKey}
+                  onChange={(e) => setDeepseekKey(e.target.value)}
+                  placeholder={
+                    maskedSettings.AI_PROVIDER_DEEPSEEK_API_KEY
+                      ? `当前: ${maskedSettings.AI_PROVIDER_DEEPSEEK_API_KEY}（留空保持不变）`
+                      : '未配置'
+                  }
+                  className="forge-input w-full font-mono text-sm"
+                  autoComplete="new-password"
+                />
+              </FieldShell>
+            </div>
+            <div className="flex justify-end">
+              <TestButton type="ai_provider" provider="deepseek" label="测试 DeepSeek" />
+            </div>
+          </div>
+
+          {/* Anthropic */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <FieldShell label="Anthropic API Key" hint="Claude 系列，擅长长文本和代码分析" compact>
+                <input
+                  type="password"
+                  value={anthropicKey}
+                  onChange={(e) => setAnthropicKey(e.target.value)}
+                  placeholder={
+                    maskedSettings.AI_PROVIDER_ANTHROPIC_API_KEY
+                      ? `当前: ${maskedSettings.AI_PROVIDER_ANTHROPIC_API_KEY}（留空保持不变）`
+                      : '未配置'
+                  }
+                  className="forge-input w-full font-mono text-sm"
+                  autoComplete="new-password"
+                />
+              </FieldShell>
+            </div>
+            <div className="flex justify-end">
+              <TestButton type="ai_provider" provider="anthropic" label="测试 Anthropic" />
+            </div>
+          </div>
+
+          {/* Mistral */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <FieldShell label="Mistral API Key" hint="开源友好，欧洲部署" compact>
+                <input
+                  type="password"
+                  value={mistralKey}
+                  onChange={(e) => setMistralKey(e.target.value)}
+                  placeholder={
+                    maskedSettings.AI_PROVIDER_MISTRAL_API_KEY
+                      ? `当前: ${maskedSettings.AI_PROVIDER_MISTRAL_API_KEY}（留空保持不变）`
+                      : '未配置'
+                  }
+                  className="forge-input w-full font-mono text-sm"
+                  autoComplete="new-password"
+                />
+              </FieldShell>
+            </div>
+            <div className="flex justify-end">
+              <TestButton type="ai_provider" provider="mistral" label="测试 Mistral" />
+            </div>
           </div>
         </div>
 

@@ -355,6 +355,12 @@ export async function PUT(request: Request) {
       SETTING_KEYS.GITHUB_TOKEN,
       SETTING_KEYS.GITHUB_ORG,
       SETTING_KEYS.APP_URL,
+      SETTING_KEYS.FORGE_REPO_OWNER,
+      SETTING_KEYS.FORGE_REPO_NAME,
+      "AI_PROVIDER_OPENAI_API_KEY",
+      "AI_PROVIDER_DEEPSEEK_API_KEY",
+      "AI_PROVIDER_ANTHROPIC_API_KEY",
+      "AI_PROVIDER_MISTRAL_API_KEY",
     ];
 
     const toUpdate: Record<string, string> = {};

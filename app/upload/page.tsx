@@ -35,6 +35,12 @@ export default function UploadPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  // 配置状态
+  const [configStatus, setConfigStatus] = useState<{
+    checked: boolean;
+    forgeRepoConfigured: boolean;
+  }>({ checked: false, forgeRepoConfigured: false });
+
   // 表单状态
   const [projectName, setProjectName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -46,10 +52,10 @@ export default function UploadPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /* -------------------- 鉴权检查 -------------------- */
+  /* -------------------- 鉴权检查 + 配置预检 -------------------- */
   useEffect(() => {
     let mounted = true;
-    async function checkAuth() {
+    async function checkAuthAndConfig() {
       try {
         const res = await fetch('/api/auth?action=status');
         const data = await res.json();
@@ -59,6 +65,28 @@ export default function UploadPage() {
           return;
         }
         setIsLoggedIn(true);
+
+        // 预检 Forge 仓库配置
+        try {
+          const configRes = await fetch('/api/config');
+          if (configRes.ok) {
+            const configData = await configRes.json();
+            if (mounted) {
+              setConfigStatus({
+                checked: true,
+                forgeRepoConfigured: Boolean(configData.forgeRepoConfigured),
+              });
+            }
+          } else {
+            if (mounted) {
+              setConfigStatus({ checked: true, forgeRepoConfigured: false });
+            }
+          }
+        } catch {
+          if (mounted) {
+            setConfigStatus({ checked: true, forgeRepoConfigured: false });
+          }
+        }
       } catch {
         if (mounted) {
           window.location.href = '/api/auth?action=login';
@@ -67,7 +95,7 @@ export default function UploadPage() {
         if (mounted) setAuthChecked(true);
       }
     }
-    checkAuth();
+    checkAuthAndConfig();
     return () => {
       mounted = false;
     };
@@ -186,6 +214,37 @@ export default function UploadPage() {
 
       {/* 表单卡片 */}
       <div className="forge-card space-y-6 p-6">
+        {/* 配置缺失警告 */}
+        {configStatus.checked && !configStatus.forgeRepoConfigured && (
+          <div className="flex items-start gap-3 rounded-lg border border-forge-yellow/40 bg-forge-yellow/10 px-4 py-3.5">
+            <svg
+              className="mt-0.5 h-5 w-5 flex-shrink-0 text-forge-yellow"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0114.082 15H1.918a1.75 1.75 0 01-1.543-2.575L6.457 1.047zM8 5a.75.75 0 01.75.75v2.5a.75.75 0 01-1.5 0v-2.5A.75.75 0 018 5zm1 6a1 1 0 11-2 0 1 1 0 012 0z" />
+            </svg>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-forge-ink">
+                Forge 仓库信息未配置
+              </p>
+              <p className="mt-0.5 text-xs text-forge-muted">
+                管理员需要在后台设置 FORGE_REPO_OWNER 和 FORGE_REPO_NAME 后才能上传治理
+              </p>
+              <Link
+                href="/admin"
+                className="mt-2 inline-flex items-center gap-1 rounded-md border border-forge-yellow/40 bg-forge-yellow/10 px-3 py-1.5 text-xs font-medium text-forge-yellow transition-colors hover:bg-forge-yellow/20"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M8 0a8.2 8.2 0 01.701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 01-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 01-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 01-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 01-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 01-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 010-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 01.704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C5.81.645 6.356.095 7.099.03 7.333.01 7.566 0 7.8 0ZM8 5a3 3 0 100 6 3 3 0 000-6Z" />
+                </svg>
+                前往后台设置
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* 项目名称 */}
         <div>
           <label
@@ -350,7 +409,7 @@ export default function UploadPage() {
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || (configStatus.checked && !configStatus.forgeRepoConfigured)}
           className="forge-btn-primary w-full text-base"
         >
           {submitting ? (
