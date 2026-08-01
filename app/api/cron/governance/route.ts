@@ -30,6 +30,8 @@ function calculateNextRunAt(frequency: string, from: Date = new Date()): Date {
  * 定时治理触发端点 (Vercel Cron)
  * GET: 扫描到期的治理计划，为每个计划创建治理项目并触发 governance.yml
  *
+ * Cron 计划：每天 UTC 00:00 执行一次（Hobby 计划限制每日一次）
+ *
  * 鉴权（三重验证，任一通过即可）：
  * 1. Vercel Cron 自动发送的 Authorization: Bearer <CRON_SECRET>
  * 2. 自定义 header x-cron-secret 与 WEBHOOK_SECRET 比对
