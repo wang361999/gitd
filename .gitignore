@@ -10,3 +10,6 @@ out
 tsconfig.tsbuildinfo
 # 构建时自动生成的版本号文件
 public/version.txt
+# 治理扫描生成的报告文件 (含扫描结果，可能包含测试密钥)
+.forge/
+.lore/

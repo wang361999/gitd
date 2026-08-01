@@ -1,19 +1,16 @@
 /**
  * scripts/generate-report.js
- * 报告生成脚本：读取溯源、安全、决策三个模块的产物，聚合生成自包含 HTML 治理报告。
+ * 报告生成脚本 v2.0：读取溯源、安全、决策三个模块的产物，
+ * 聚合生成自包含 HTML 治理报告。
  *
- * 输入:
- *   - .forge/provenance.json
- *   - .forge/security-report.json
- *   - .lore/decisions.jsonl
+ * 增强:
+ *   - 兼容 v1 和 v2 数据格式
+ *   - 展示置信度分布、作者统计、模型分布
+ *   - 展示安全评分等级、修复优先级、CWE 统计
+ *   - 展示决策分类分布、置信度评分
+ *   - 更丰富的可视化（进度条、徽章、分类标签）
  *
  * 输出: .forge/governance-report.html （内联 CSS，无外部依赖）
- *
- * 报告内容:
- *   1. 项目摘要
- *   2. 代码来源分布（人类 vs AI）
- *   3. 安全评分与问题列表
- *   4. 决策时间线
  */
 
 const fs = require("fs");
@@ -33,7 +30,6 @@ const OUTPUT_FILE = path.join(FORGE_DIR, "governance-report.html");
 // 工具函数
 // ============================================================
 
-/** 读取并解析 JSON 文件，失败返回 null */
 function readJson(file) {
   try {
     if (!fs.existsSync(file)) return null;
@@ -44,7 +40,6 @@ function readJson(file) {
   }
 }
 
-/** 读取 JSONL 文件，返回对象数组 */
 function readJsonl(file) {
   if (!fs.existsSync(file)) return [];
   try {
@@ -66,7 +61,6 @@ function readJsonl(file) {
   }
 }
 
-/** HTML 转义 */
 function esc(text) {
   if (text == null) return "";
   return String(text)
@@ -77,7 +71,6 @@ function esc(text) {
     .replace(/'/g, "&#39;");
 }
 
-/** 执行 git 命令 */
 function git(args) {
   try {
     return execSync(`git ${args}`, {
@@ -90,7 +83,6 @@ function git(args) {
   }
 }
 
-/** 获取项目名称（从 git remote 或目录名） */
 function getProjectName() {
   const remote = git("remote get-url origin");
   if (remote) {
@@ -100,7 +92,6 @@ function getProjectName() {
   return path.basename(ROOT);
 }
 
-/** 获取仓库信息 */
 function getRepoInfo() {
   const remote = git("remote get-url origin");
   let owner = "";
@@ -115,7 +106,6 @@ function getRepoInfo() {
   return { owner, repo, remote };
 }
 
-/** 格式化日期 */
 function fmtDate(iso) {
   if (!iso) return "—";
   try {
@@ -125,24 +115,19 @@ function fmtDate(iso) {
   }
 }
 
-/** 根据安全评分返回颜色 */
 function scoreColor(score) {
-  if (score >= 80) return "#16a34a"; // 绿
-  if (score >= 60) return "#ca8a04"; // 黄
-  if (score >= 40) return "#ea580c"; // 橙
-  return "#dc2626"; // 红
+  if (score >= 80) return "#16a34a";
+  if (score >= 60) return "#ca8a04";
+  if (score >= 40) return "#ea580c";
+  return "#dc2626";
 }
 
-/** 根据严重程度返回颜色标签 */
 function severityColor(sev) {
   return (
-    { critical: "#dc2626", high: "#ea580c", medium: "#ca8a04", low: "#2563eb" }[
-      sev
-    ] || "#6b7280"
+    { critical: "#dc2626", high: "#ea580c", medium: "#ca8a04", low: "#2563eb", info: "#6b7280" }[sev] || "#6b7280"
   );
 }
 
-/** 安全评分对应文字描述 */
 function scoreLabel(score) {
   if (score >= 80) return "良好";
   if (score >= 60) return "一般";
@@ -150,15 +135,56 @@ function scoreLabel(score) {
   return "危险";
 }
 
-/** 计算百分比 */
 function pct(part, total) {
   if (!total) return "0.0";
   return ((part / total) * 100).toFixed(1);
 }
 
+/** 决策分类标签颜色 */
+function categoryColor(cat) {
+  return {
+    architecture: "#6366f1",
+    tech_choice: "#8b5cf6",
+    security: "#dc2626",
+    performance: "#f59e0b",
+    data: "#06b6d4",
+    api: "#10b981",
+    infra: "#3b82f6",
+    testing: "#ec4899",
+    other: "#6b7280",
+    none: "#9ca3af",
+    error: "#dc2626",
+  }[cat] || "#6b7280";
+}
+
+/** 决策分类中文名 */
+function categoryName(cat) {
+  return {
+    architecture: "架构决策",
+    tech_choice: "技术选型",
+    security: "安全决策",
+    performance: "性能优化",
+    data: "数据决策",
+    api: "API 设计",
+    infra: "基础设施",
+    testing: "测试策略",
+    other: "其他",
+    none: "无决策",
+    error: "分析错误",
+  }[cat] || cat;
+}
+
 // ============================================================
 // HTML 片段生成
 // ============================================================
+
+function section(title, inner, icon = "") {
+  return `
+  <section class="report-section">
+    <h2>${icon} ${esc(title)}</h2>
+    ${inner}
+  </section>`;
+}
 
 function renderHeader(projectName, repoInfo) {
   const now = fmtDate(new Date().toISOString());
@@ -166,7 +192,7 @@ function renderHeader(projectName, repoInfo) {
   <header class="report-header">
     <div class="brand">
       <span class="logo">FORGE</span>
-      <span class="subtitle">治理报告 · Governance Report</span>
+      <span class="subtitle">治理报告 · Governance Report v2.0</span>
     </div>
     <h1>${esc(projectName)}</h1>
     <div class="meta">
@@ -180,19 +206,22 @@ function renderSummaryCards(provenance, security, decisions) {
   const totalFiles = provenance?.summary?.totalFiles ?? "—";
   const totalLines = provenance?.summary?.totalLines ?? "—";
   const score = security?.score ?? "—";
-  const decisionCount = decisions.length;
+  const scoreGrade = security?.scoreGrade || "";
+  const validDecisions = decisions.filter((d) => d.decision && (d.confidence ?? 1) >= 0.5);
+  const decisionCount = validDecisions.length;
   const scoreC = typeof score === "number" ? scoreColor(score) : "#6b7280";
 
   const cards = [
-    { label: "文件总数", value: totalFiles, color: "#2563eb" },
-    { label: "代码行数", value: totalLines, color: "#7c3aed" },
+    { label: "文件总数", value: totalFiles, color: "#2563eb", icon: "📁" },
+    { label: "代码行数", value: totalLines, color: "#7c3aed", icon: "📝" },
     {
       label: "安全评分",
       value: `${score} / 100`,
       color: scoreC,
-      sub: typeof score === "number" ? scoreLabel(score) : "",
+      sub: typeof score === "number" ? `${scoreLabel(score)} (${scoreGrade})` : "",
+      icon: "🛡️",
     },
-    { label: "决策记录", value: decisionCount, color: "#0891b2" },
+    { label: "决策记录", value: decisionCount, color: "#0891b2", icon: "🧠" },
   ];
 
   return `
@@ -201,6 +230,7 @@ function renderSummaryCards(provenance, security, decisions) {
       .map(
         (c) => `
       <div class="card">
+        <div class="card-icon">${c.icon}</div>
         <div class="card-value" style="color:${c.color}">${esc(c.value)}</div>
         <div class="card-label">${esc(c.label)}</div>
         ${c.sub ? `<div class="card-sub" style="color:${c.color}">${esc(c.sub)}</div>` : ""}
@@ -212,7 +242,7 @@ function renderSummaryCards(provenance, security, decisions) {
 
 function renderProvenance(provenance) {
   if (!provenance) {
-    return section("代码来源分布", `<p class="empty">未找到溯源数据 (.forge/provenance.json)</p>`);
+    return section("代码来源分布", `<p class="empty">未找到溯源数据 (.forge/provenance.json)</p>`, "🔬");
   }
 
   const s = provenance.summary || {};
@@ -221,25 +251,93 @@ function renderProvenance(provenance) {
   const total = s.totalLines || ai + human || 1;
   const aiPct = pct(ai, total);
   const humanPct = pct(human, total);
+  const isV2 = provenance.version === "2.0";
 
   // 模型分布统计
-  const modelStats = {};
-  if (Array.isArray(provenance.files)) {
-    for (const file of provenance.files) {
-      for (const line of file.lines || []) {
-        if (line.source === "ai" && line.model) {
-          modelStats[line.model] = (modelStats[line.model] || 0) + 1;
+  let modelRows = "";
+  if (isV2 && Array.isArray(provenance.models) && provenance.models.length > 0) {
+    modelRows = provenance.models
+      .map(
+        (m) =>
+          `<tr><td><code>${esc(m.name)}</code></td><td>${m.lines}</td><td>${m.commits}</td><td>${pct(m.lines, ai)}%</td></tr>`
+      )
+      .join("");
+  } else {
+    // v1 兼容: 从 files 数据中统计
+    const modelStats = {};
+    if (Array.isArray(provenance.files)) {
+      for (const file of provenance.files) {
+        for (const line of file.lines || []) {
+          if (line.source === "ai" && line.model) {
+            modelStats[line.model] = (modelStats[line.model] || 0) + 1;
+          }
         }
       }
     }
+    modelRows = Object.entries(modelStats)
+      .sort((a, b) => b[1] - a[1])
+      .map(
+        ([model, count]) =>
+          `<tr><td><code>${esc(model)}</code></td><td>${count}</td><td>—</td><td>${pct(count, ai)}%</td></tr>`
+      )
+      .join("");
   }
-  const modelRows = Object.entries(modelStats)
-    .sort((a, b) => b[1] - a[1])
-    .map(
-      ([model, count]) =>
-        `<tr><td><code>${esc(model)}</code></td><td>${count}</td><td>${pct(count, ai)}%</td></tr>`
-    )
-    .join("");
+
+  // 置信度分布 (v2)
+  let confidenceHtml = "";
+  if (isV2 && s.confidence) {
+    const conf = s.confidence;
+    const confTotal = (conf.high || 0) + (conf.medium || 0) + (conf.low || 0);
+    confidenceHtml = `
+    <div class="confidence-bar">
+      <h3>AI 归属置信度分布</h3>
+      <div class="conf-stats">
+        <div class="conf-item">
+          <span class="conf-dot" style="background:#16a34a"></span>
+          <span>高置信度</span>
+          <strong>${conf.high || 0}</strong>
+          <span class="conf-pct">(${pct(conf.high || 0, confTotal)}%)</span>
+        </div>
+        <div class="conf-item">
+          <span class="conf-dot" style="background:#ca8a04"></span>
+          <span>中置信度</span>
+          <strong>${conf.medium || 0}</strong>
+          <span class="conf-pct">(${pct(conf.medium || 0, confTotal)}%)</span>
+        </div>
+        <div class="conf-item">
+          <span class="conf-dot" style="background:#dc2626"></span>
+          <span>低置信度</span>
+          <strong>${conf.low || 0}</strong>
+          <span class="conf-pct">(${pct(conf.low || 0, confTotal)}%)</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 作者统计 (v2)
+  let authorHtml = "";
+  if (isV2 && Array.isArray(provenance.authors) && provenance.authors.length > 0) {
+    const topAuthors = provenance.authors.slice(0, 10);
+    authorHtml = `
+    <h3>贡献者统计 (Top 10)</h3>
+    <div class="table-wrap">
+    <table class="data-table">
+      <tr><th>作者</th><th>代码行数</th><th>Commit 数</th><th>AI Commit</th><th>人类 Commit</th></tr>
+      ${topAuthors
+        .map(
+          (a) =>
+            `<tr>
+              <td>${esc(a.name)}</td>
+              <td>${a.lines}</td>
+              <td>${a.commits}</td>
+              <td>${a.aiCommits || 0}</td>
+              <td>${a.humanCommits || 0}</td>
+            </tr>`
+        )
+        .join("")}
+    </table>
+    </div>`;
+  }
 
   return section(
     "代码来源分布",
@@ -254,35 +352,40 @@ function renderProvenance(provenance) {
       <tr><td><span class="dot" style="background:#2563eb"></span> 人类编写</td><td>${human}</td><td>${humanPct}%</td></tr>
       <tr class="total-row"><td>合计</td><td>${total}</td><td>100%</td></tr>
     </table>
+    ${confidenceHtml}
     ${
       modelRows
         ? `<h3>AI 模型分布</h3>
+           <div class="table-wrap">
            <table class="data-table">
-             <tr><th>模型</th><th>行数</th><th>占 AI 比例</th></tr>
+             <tr><th>模型</th><th>行数</th><th>Commit 数</th><th>占 AI 比例</th></tr>
              ${modelRows}
-           </table>`
+           </table>
+           </div>`
         : ""
-    }`
+    }
+    ${authorHtml}`,
+    "🔬"
   );
 }
 
 function renderSecurity(security) {
   if (!security) {
-    return section("安全检查", `<p class="empty">未找到安全报告 (.forge/security-report.json)</p>`);
+    return section("安全检查", `<p class="empty">未找到安全报告 (.forge/security-report.json)</p>`, "🛡️");
   }
 
   const score = security.score ?? 0;
+  const grade = security.scoreGrade || "";
   const s = security.summary || {};
   const issues = security.issues || [];
-  const topIssues = issues.slice(0, 20);
+  const topIssues = issues.slice(0, 30);
   const depVuln = security.dependencies?.vulnerable || 0;
+  const isV2 = security.version === "2.0";
 
-  const severityBadges = ["critical", "high", "medium", "low"]
+  const severityBadges = ["critical", "high", "medium", "low", "info"]
     .map(
       (sev) =>
-        `<span class="badge" style="background:${severityColor(sev)}">${sevLabel(
-          sev
-        )}: ${s[sev] || 0}</span>`
+        `<span class="badge" style="background:${severityColor(sev)}">${sevLabel(sev)}: ${s[sev] || 0}</span>`
     )
     .join("");
 
@@ -290,16 +393,60 @@ function renderSecurity(security) {
     .map(
       (issue) => `
       <tr>
-        <td><span class="badge" style="background:${severityColor(issue.severity)}">${esc(
-        issue.severity
-      )}</span></td>
+        <td><span class="badge" style="background:${severityColor(issue.severity)}">${esc(issue.severity)}</span></td>
         <td>${esc(issue.type)}</td>
         <td title="${esc(issue.snippet || "")}">${esc(issue.file)}:${esc(issue.line)}</td>
         <td>${esc(issue.description)}</td>
         <td>${esc(issue.suggestion)}</td>
+        ${isV2 ? `<td>${issue.cwe ? `<code>${esc(issue.cwe)}</code>` : "—"}</td>` : ""}
       </tr>`
     )
     .join("");
+
+  // 修复优先级计划 (v2)
+  let remediationHtml = "";
+  if (isV2 && Array.isArray(security.remediationPlan) && security.remediationPlan.length > 0) {
+    remediationHtml = `
+    <h3>修复优先级建议</h3>
+    <div class="remediation-plan">
+      ${security.remediationPlan
+        .map(
+          (p) =>
+            `<div class="remediation-item">
+              <div class="remediation-priority">${esc(p.priority)}</div>
+              <div class="remediation-desc">${esc(p.description)}</div>
+              <div class="remediation-action">${esc(p.action)}</div>
+            </div>`
+        )
+        .join("")}
+    </div>`;
+  }
+
+  // CWE 统计 (v2)
+  let cweHtml = "";
+  if (isV2 && security.cweStats && Object.keys(security.cweStats).length > 0) {
+    const cweRows = Object.entries(security.cweStats)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cwe, count]) => `<tr><td><code>${esc(cwe)}</code></td><td>${count}</td></tr>`)
+      .join("");
+    cweHtml = `
+    <h3>CWE 漏洞类型统计</h3>
+    <table class="data-table">
+      <tr><th>CWE 编号</th><th>出现次数</th></tr>
+      ${cweRows}
+    </table>`;
+  }
+
+  // Top 问题文件 (v2)
+  let topFilesHtml = "";
+  if (isV2 && Array.isArray(security.topFiles) && security.topFiles.length > 0) {
+    topFilesHtml = `
+    <h3>问题最多的文件 (Top 10)</h3>
+    <table class="data-table">
+      <tr><th>文件</th><th>问题数</th></tr>
+      ${security.topFiles.map((f) => `<tr><td>${esc(f.file)}</td><td>${f.issues}</td></tr>`).join("")}
+    </table>`;
+  }
 
   return section(
     "安全检查",
@@ -307,88 +454,111 @@ function renderSecurity(security) {
     <div class="security-score">
       <div class="score-ring" style="border-color:${scoreColor(score)}">
         <span style="color:${scoreColor(score)}">${score}</span>
-        <small>评分</small>
+        <small>评分 ${grade}</small>
       </div>
       <div class="score-info">
-        <div class="score-status" style="color:${scoreColor(score)}">${scoreLabel(
-      score
-    )}</div>
+        <div class="score-status" style="color:${scoreColor(score)}">${scoreLabel(score)}</div>
         <div>${severityBadges}</div>
         <div class="dep-info">依赖漏洞: ${depVuln} 个</div>
+        ${isV2 && security.stats ? `<div class="dep-info">检测规则: ${security.stats.totalRules || 0} 条 (${security.stats.secretRules || 0} 密钥 + ${security.stats.codeRules || 0} 代码)</div>` : ""}
       </div>
     </div>
+    ${remediationHtml}
     ${
       issues.length > 0
         ? `<h3>问题列表 (显示前 ${topIssues.length} / ${issues.length} 项)</h3>
            <div class="table-wrap">
            <table class="issue-table">
-             <tr><th>严重度</th><th>类型</th><th>位置</th><th>描述</th><th>建议</th></tr>
+             <tr><th>严重度</th><th>类型</th><th>位置</th><th>描述</th><th>建议</th>${isV2 ? "<th>CWE</th>" : ""}</tr>
              ${issueRows}
            </table>
            </div>`
-        : `<p class="empty">未发现安全问题</p>`
-    }`
+        : `<p class="empty">未发现安全问题 🎉</p>`
+    }
+    ${cweHtml}
+    ${topFilesHtml}`,
+    "🛡️"
   );
 }
 
 function sevLabel(sev) {
-  return { critical: "严重", high: "高危", medium: "中危", low: "低危" }[sev] || sev;
+  return { critical: "严重", high: "高危", medium: "中危", low: "低危", info: "信息" }[sev] || sev;
 }
 
 function renderDecisions(decisions) {
-  if (decisions.length === 0) {
-    return section("决策时间线", `<p class="empty">未找到决策记录 (.lore/decisions.jsonl)</p>`);
+  // 只展示有效决策
+  const valid = decisions.filter((d) => d.decision && (d.confidence ?? 1) >= 0.5);
+
+  if (valid.length === 0) {
+    return section("决策时间线", `<p class="empty">未找到有效决策记录 (.lore/decisions.jsonl)</p>`, "🧠");
   }
 
   // 按时间倒序
-  const sorted = [...decisions].sort((a, b) => {
+  const sorted = [...valid].sort((a, b) => {
     return (b.timestamp || "").localeCompare(a.timestamp || "");
   });
 
-  const items = sorted
+  // 分类统计
+  const categoryStats = {};
+  for (const d of sorted) {
+    const cat = d.category || "other";
+    categoryStats[cat] = (categoryStats[cat] || 0) + 1;
+  }
+
+  const categoryHtml = Object.entries(categoryStats)
+    .sort((a, b) => b[1] - a[1])
     .map(
-      (d) => `
+      ([cat, count]) =>
+        `<span class="badge" style="background:${categoryColor(cat)}">${categoryName(cat)}: ${count}</span>`
+    )
+    .join("");
+
+  const items = sorted
+    .slice(0, 100) // 最多展示 100 条
+    .map((d) => {
+      const cat = d.category || "other";
+      const conf = d.confidence ?? 1;
+      const confColor = conf >= 0.8 ? "#16a34a" : conf >= 0.5 ? "#ca8a04" : "#dc2626";
+      return `
       <div class="timeline-item">
-        <div class="timeline-dot"></div>
+        <div class="timeline-dot" style="background:${categoryColor(cat)};box-shadow:0 0 0 2px ${categoryColor(cat)}"></div>
         <div class="timeline-content">
           <div class="timeline-head">
             <span class="timeline-sha">${esc((d.commit_sha || "").slice(0, 8))}</span>
             <span class="timeline-date">${fmtDate(d.timestamp)}</span>
             <span class="timeline-author">${esc(d.author || "")}</span>
+            <span class="timeline-cat" style="background:${categoryColor(cat)}">${categoryName(cat)}</span>
+            <span class="timeline-conf" style="color:${confColor}">置信度 ${(conf * 100).toFixed(0)}%</span>
           </div>
           <div class="timeline-body">
             <p><strong>上下文:</strong> ${esc(d.context)}</p>
             <p class="decision-line"><strong>决策:</strong> ${esc(d.decision)}</p>
-            ${
-              d.rejected
-                ? `<p class="rejected-line"><strong>否决方案:</strong> ${esc(d.rejected)}</p>`
-                : ""
-            }
-            ${
-              d.constraints
-                ? `<p><strong>约束:</strong> ${esc(d.constraints)}</p>`
-                : ""
-            }
-            ${d.message ? `<p class="commit-msg"><code>${esc(d.message.split("\n")[0])}</code></p>` : ""}
+            ${d.rejected ? `<p class="rejected-line"><strong>否决方案:</strong> ${esc(d.rejected)}</p>` : ""}
+            ${d.constraints ? `<p><strong>约束:</strong> ${esc(d.constraints)}</p>` : ""}
+            ${d.message ? `<p class="commit-msg"><code>${esc(d.message)}</code></p>` : ""}
           </div>
         </div>
-      </div>`
-    )
+      </div>`;
+    })
     .join("");
 
-  return section("决策时间线", `<div class="timeline">${items}</div>`);
+  return section(
+    "决策时间线",
+    `
+    <div class="decision-stats">
+      <p class="stats-label">决策分类分布:</p>
+      <div class="badge-row">${categoryHtml}</div>
+      <p class="stats-label" style="margin-top:8px">有效决策: <strong>${valid.length}</strong> / ${decisions.length} 条记录${sorted.length > 100 ? ` (展示最近 100 条)` : ""}</p>
+    </div>
+    <div class="timeline">${items}</div>`,
+    "🧠"
+  );
 }
 
-/** 包裹一个 section */
-function section(title, inner) {
-  return `
-  <section class="report-section">
-    <h2>${esc(title)}</h2>
-    ${inner}
-  </section>`;
-}
+// ============================================================
+// HTML 构建
+// ============================================================
 
-/** 生成完整 HTML */
 function buildHtml(projectName, repoInfo, provenance, security, decisions) {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -406,7 +576,7 @@ function buildHtml(projectName, repoInfo, provenance, security, decisions) {
     line-height: 1.6;
     padding: 24px;
   }
-  .container { max-width: 960px; margin: 0 auto; }
+  .container { max-width: 1000px; margin: 0 auto; }
 
   /* 头部 */
   .report-header {
@@ -430,7 +600,9 @@ function buildHtml(projectName, repoInfo, provenance, security, decisions) {
   .card {
     background: #fff; border-radius: 10px; padding: 24px; text-align: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    position: relative; overflow: hidden;
   }
+  .card-icon { font-size: 24px; margin-bottom: 8px; }
   .card-value { font-size: 32px; font-weight: 700; }
   .card-label { color: #64748b; font-size: 13px; margin-top: 4px; }
   .card-sub { font-size: 12px; margin-top: 4px; font-weight: 600; }
@@ -449,6 +621,13 @@ function buildHtml(projectName, repoInfo, provenance, security, decisions) {
   }
   .dist-ai { background: #7c3aed; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; min-width: 40px; }
   .dist-human { background: #2563eb; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; min-width: 40px; }
+
+  /* 置信度 */
+  .confidence-bar { margin: 16px 0; padding: 16px; background: #f8fafc; border-radius: 8px; }
+  .conf-stats { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 8px; }
+  .conf-item { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+  .conf-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .conf-pct { color: #94a3b8; font-size: 12px; }
 
   /* 表格 */
   .data-table, .issue-table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -475,18 +654,32 @@ function buildHtml(projectName, repoInfo, provenance, security, decisions) {
   .table-wrap { overflow-x: auto; }
   .issue-table td { vertical-align: top; }
 
+  /* 修复优先级 */
+  .remediation-plan { display: flex; flex-direction: column; gap: 12px; }
+  .remediation-item { background: #f8fafc; border-radius: 8px; padding: 12px 16px; border-left: 4px solid #dc2626; }
+  .remediation-priority { font-weight: 700; font-size: 14px; color: #dc2626; }
+  .remediation-desc { font-size: 14px; margin-top: 4px; }
+  .remediation-action { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+  /* 决策统计 */
+  .decision-stats { margin-bottom: 20px; }
+  .stats-label { font-size: 14px; color: #475569; margin-bottom: 6px; }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 4px; }
+
   /* 时间线 */
   .timeline { position: relative; padding-left: 24px; }
   .timeline::before { content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: #e2e8f0; }
   .timeline-item { position: relative; margin-bottom: 24px; }
   .timeline-dot { position: absolute; left: -24px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: #6366f1; border: 2px solid #fff; box-shadow: 0 0 0 2px #6366f1; }
   .timeline-content { background: #f8fafc; border-radius: 8px; padding: 16px; }
-  .timeline-head { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+  .timeline-head { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; align-items: center; }
   .timeline-sha { font-family: monospace; background: #1e293b; color: #fff; padding: 1px 8px; border-radius: 4px; }
   .timeline-date { color: #64748b; }
   .timeline-author { color: #64748b; }
+  .timeline-cat { color: #fff; padding: 1px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+  .timeline-conf { font-size: 12px; font-weight: 600; }
   .timeline-body p { margin-bottom: 6px; font-size: 14px; }
-  .decision-line { color: #0f172a; }
+  .decision-line { color: #0f172a; font-weight: 500; }
   .rejected-line { color: #b91c1c; }
   .commit-msg { margin-top: 10px; }
   .commit-msg code { font-size: 12px; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; word-break: break-all; }
@@ -516,26 +709,27 @@ function buildHtml(projectName, repoInfo, provenance, security, decisions) {
 
 function main() {
   console.log("========================================");
-  console.log(" Agent Forge - 治理报告生成脚本");
+  console.log(" Agent Forge - 治理报告生成脚本 v2.0");
   console.log("========================================");
 
   console.log("\n[1/3] 读取各模块数据 ...");
   const provenance = readJson(PROVENANCE_FILE);
   console.log(
-    `  溯源数据: ${provenance ? "已加载" : "缺失"} ${
+    `  溯源数据: ${provenance ? `已加载 v${provenance.version || "1.0"}` : "缺失"} ${
       provenance ? "(" + (provenance.summary?.totalFiles || 0) + " 文件)" : ""
     }`
   );
 
   const security = readJson(SECURITY_FILE);
   console.log(
-    `  安全报告: ${security ? "已加载" : "缺失"} ${
+    `  安全报告: ${security ? `已加载 v${security.version || "1.0"}` : "缺失"} ${
       security ? "(评分 " + security.score + ", " + (security.issues?.length || 0) + " 问题)" : ""
     }`
   );
 
   const decisions = readJsonl(DECISIONS_FILE);
-  console.log(`  决策记录: ${decisions.length} 条`);
+  const validDecisions = decisions.filter((d) => d.decision && (d.confidence ?? 1) >= 0.5);
+  console.log(`  决策记录: ${decisions.length} 条 (${validDecisions.length} 条有效)`);
 
   console.log("\n[2/3] 聚合数据并生成 HTML ...");
   const repoInfo = getRepoInfo();
@@ -550,13 +744,13 @@ function main() {
 
   const sizeKB = (Buffer.byteLength(html) / 1024).toFixed(1);
   console.log("\n========================================");
-  console.log(" 治理报告生成完成！");
+  console.log(" 治理报告生成完成！v2.0");
   console.log("========================================");
   console.log(`输出文件: ${OUTPUT_FILE}`);
   console.log(`文件大小: ${sizeKB} KB`);
   console.log(`溯源文件: ${provenance?.summary?.totalFiles || 0} 个`);
-  console.log(`安全评分: ${security?.score ?? "—"} / 100`);
-  console.log(`决策记录: ${decisions.length} 条`);
+  console.log(`安全评分: ${security?.score ?? "—"} / 100 (${security?.scoreGrade || ""})`);
+  console.log(`决策记录: ${validDecisions.length} 条有效 / ${decisions.length} 条总计`);
 }
 
 main();
