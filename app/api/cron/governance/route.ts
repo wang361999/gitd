@@ -30,16 +30,39 @@ function calculateNextRunAt(frequency: string, from: Date = new Date()): Date {
  * 定时治理触发端点 (Vercel Cron)
  * GET: 扫描到期的治理计划，为每个计划创建治理项目并触发 governance.yml
  *
- * 鉴权：通过 header `x-cron-secret` 或 query `?secret=` 与 WEBHOOK_SECRET 比对
+ * 鉴权（三重验证，任一通过即可）：
+ * 1. Vercel Cron 自动发送的 Authorization: Bearer <CRON_SECRET>
+ * 2. 自定义 header x-cron-secret 与 WEBHOOK_SECRET 比对
+ * 3. query ?secret= 与 WEBHOOK_SECRET 比对（兼容旧配置）
  */
 export async function GET(request: Request) {
   try {
-    // -------------------- 验证 Cron 密钥 --------------------
+    // -------------------- 验证 Cron 密钥（三重验证） --------------------
     const { searchParams } = new URL(request.url);
-    const secret =
-      request.headers.get("x-cron-secret") || searchParams.get("secret");
     const expectedSecret = await getSetting(SETTING_KEYS.WEBHOOK_SECRET);
-    if (!secret || !expectedSecret || secret !== expectedSecret) {
+    const cronSecret = process.env.CRON_SECRET; // Vercel Cron 专用密钥
+
+    // 方式1：Vercel Cron 标准鉴权 (Authorization: Bearer xxx)
+    const authHeader = request.headers.get("authorization");
+    const bearerToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : null;
+
+    // 方式2：自定义 header
+    const headerSecret = request.headers.get("x-cron-secret");
+
+    // 方式3：query 参数
+    const querySecret = searchParams.get("secret");
+
+    const providedSecret = bearerToken || headerSecret || querySecret;
+
+    // 验证：提供的密钥必须匹配 WEBHOOK_SECRET 或 CRON_SECRET
+    const isValid =
+      providedSecret &&
+      ((expectedSecret && providedSecret === expectedSecret) ||
+        (cronSecret && providedSecret === cronSecret));
+
+    if (!isValid) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Middleware: 系统配置检查 + 登录验证
+ * Middleware: 登录验证
  *
- * 两层保护：
- * 1. Setup 检查：未配置时跳转到 /setup（cookie: forge-setup）
- * 2. 登录检查：/dashboard、/project、/new 需要登录（cookie: forge-auth）
+ * 系统已配置完毕，不再强制跳转 /setup。
+ * /setup 页面仍可通过直接访问 URL 进行重新配置。
  *
- * 注意：Edge Runtime 不支持 Prisma，因此通过 cookie 标记判断状态
+ * 受保护的路由需要登录（cookie: forge-auth）
  * 登录时由 /api/auth callback 设置 forge-auth=1
  * 登出时由 /api/auth logout 清除 forge-auth
  */
@@ -26,14 +25,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // -------------------- 第一层：Setup 检查 --------------------
-  const setupComplete = request.cookies.get("forge-setup");
-  if (!setupComplete) {
-    const setupUrl = new URL("/setup", request.url);
-    return NextResponse.redirect(setupUrl);
-  }
-
-  // -------------------- 第二层：登录检查 --------------------
+  // -------------------- 登录检查 --------------------
   // 受保护的路由：需要登录才能访问
   const protectedPaths = ["/dashboard", "/project", "/new", "/governance", "/upload", "/schedules"];
   const isProtected = protectedPaths.some((p) => pathname.startsWith(p));

@@ -118,6 +118,7 @@ export default function DashboardPage() {
   // 搜索与筛选
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const PAGE_SIZE = 10;
@@ -134,7 +135,7 @@ export default function DashboardPage() {
   // 状态筛选变化时重置页码
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, typeFilter]);
 
   const loadProjects = useCallback(
     async (page: number, isRefresh = false) => {
@@ -153,6 +154,8 @@ export default function DashboardPage() {
         if (debouncedSearch) params.set('search', debouncedSearch);
         if (statusFilter && statusFilter !== 'all')
           params.set('status', statusFilter);
+        if (typeFilter && typeFilter !== 'all')
+          params.set('type', typeFilter);
 
         const res = await fetch(`/api/projects?${params.toString()}`);
         if (res.ok) {
@@ -173,7 +176,7 @@ export default function DashboardPage() {
         }
       }
     },
-    [debouncedSearch, statusFilter]
+    [debouncedSearch, statusFilter, typeFilter]
   );
 
   useEffect(() => {
@@ -204,6 +207,8 @@ export default function DashboardPage() {
         if (debouncedSearch) params.set('search', debouncedSearch);
         if (statusFilter && statusFilter !== 'all')
           params.set('status', statusFilter);
+        if (typeFilter && typeFilter !== 'all')
+          params.set('type', typeFilter);
 
         const res = await fetch(`/api/projects?${params.toString()}`);
         if (!mounted) return;
@@ -232,7 +237,7 @@ export default function DashboardPage() {
     return () => {
       mounted = false;
     };
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, typeFilter]);
 
   // 统计数据
   const total = pagination?.total ?? projects.length;
@@ -424,6 +429,18 @@ export default function DashboardPage() {
               <option value="done">已完成</option>
               <option value="failed">失败</option>
             </select>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="rounded-lg border border-forge-border bg-forge-bg px-3 py-1.5 text-sm text-forge-ink focus:border-forge-accent focus:outline-none"
+            >
+              <option value="all">全部类型</option>
+              <option value="web">Web 应用</option>
+              <option value="desktop">桌面应用</option>
+              <option value="mobile">移动应用</option>
+              <option value="governance-only">独立治理</option>
+              <option value="upload">上传治理</option>
+            </select>
           </div>
         </div>
         {pagination && pagination.total > 0 && (
@@ -437,7 +454,7 @@ export default function DashboardPage() {
           projects={projects}
           loading={loading}
           onProjectDeleted={() => loadProjects(currentPage, true)}
-          searchMode={!!debouncedSearch || statusFilter !== 'all'}
+          searchMode={!!debouncedSearch || statusFilter !== 'all' || typeFilter !== 'all'}
         />
 
         {/* 分页控件 */}

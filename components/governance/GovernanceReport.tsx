@@ -472,6 +472,43 @@ export default function GovernanceReport({ projectId }: GovernanceReportProps) {
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
         <button
           type="button"
+          onClick={() => {
+            // 导出治理报告为 JSON 文件
+            const exportData = {
+              projectName: summary.projectName || '未命名项目',
+              projectId,
+              exportedAt: new Date().toISOString(),
+              summary,
+              provenance: data.provenance,
+              security: data.security,
+              lore: data.lore,
+              reports: data.reports,
+            };
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+              type: 'application/json',
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `governance-report-${projectId}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="forge-btn-secondary text-sm"
+        >
+          <svg
+            className="h-4 w-4"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M2.75 1.5a.25.25 0 00-.25.25v12.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25V4.664a.25.25 0 00-.073-.177l-2.914-2.914a.25.25 0 00-.177-.073H2.75zM1 1.75C1 .784 1.784 0 2.75 0h7.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16H2.75A1.75 1.75 0 011 14.25V1.75z" />
+            <path d="M7.25 6a.75.75 0 01.75.75v3.546l1.22-1.22a.75.75 0 11 1.06 1.06l-2.5 2.5a.75.75 0 01-1.06 0l-2.5-2.5a.75.75 0 111.06-1.06l1.22 1.22V6.75A.75.75 0 017.25 6z" />
+          </svg>
+          导出 JSON
+        </button>
+        <button
+          type="button"
           onClick={() => window.print()}
           className="forge-btn-secondary text-sm"
         >

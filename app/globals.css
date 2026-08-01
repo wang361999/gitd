@@ -150,3 +150,47 @@ a {
 .forge-animate-fade-in {
   animation: forge-fade-in 0.3s ease-out;
 }
+
+/* ============================================================
+   打印样式 — 治理报告导出 PDF 时使用
+   ============================================================ */
+@media print {
+  /* 隐藏不需要打印的元素 */
+  header,
+  nav,
+  footer,
+  .forge-card button[class*='forge-btn'],
+  .no-print {
+    display: none !important;
+  }
+
+  /* 使用白色背景和黑色文字 */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* 卡片使用边框而非背景色 */
+  .forge-card {
+    background: white !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  /* 文字颜色强制为黑色 */
+  .text-forge-ink,
+  .text-forge-muted {
+    color: black !important;
+  }
+
+  /* 展开所有折叠区域 */
+  .forge-card.overflow-hidden > div:last-child {
+    display: block !important;
+  }
+
+  /* 页面边距 */
+  @page {
+    margin: 1.5cm;
+  }
+}

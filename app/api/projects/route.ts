@@ -78,6 +78,9 @@ export async function GET(request: Request) {
     // 状态筛选
     const statusFilter = searchParams.get("status")?.trim() || "";
 
+    // 类型筛选
+    const typeFilter = searchParams.get("type")?.trim() || "";
+
     // 构建 where 条件
     const where: Record<string, unknown> = { userId: session.userId };
 
@@ -90,6 +93,10 @@ export async function GET(request: Request) {
 
     if (statusFilter && statusFilter !== "all") {
       where.status = statusFilter;
+    }
+
+    if (typeFilter && typeFilter !== "all") {
+      where.projectType = typeFilter;
     }
 
     const [projects, total] = await Promise.all([

@@ -12,6 +12,8 @@ import {
 import { getAppUrl, getForgeRepo } from "@/lib/settings";
 
 const MAX_FILES = 100;
+/** 最大上传文件大小：50MB */
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 /** 需要忽略的目录片段 */
 const IGNORED_SEGMENTS = [
@@ -110,6 +112,14 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Missing required field: file (ZIP)" },
         { status: 400 }
+      );
+    }
+
+    // -------------------- 文件大小限制 --------------------
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `文件大小超过限制（最大 ${MAX_FILE_SIZE / 1024 / 1024}MB，当前 ${Math.round(file.size / 1024 / 1024)}MB）` },
+        { status: 413 }
       );
     }
 
